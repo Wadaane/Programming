@@ -5,7 +5,7 @@ Misc programming files.
 Git Cheatsheet:
     
     git add file.py
-    git commit -m "comment"
+    git commit -am "comment"
     git reset HEAD~1 # Cancel local git
     git push 
 
