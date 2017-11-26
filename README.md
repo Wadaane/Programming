@@ -10,7 +10,7 @@ Git Cheatsheet:
     git push 
 
 
-    # # First time
+    ## First time
     git add file.py
     git commit -m "comment"
     git remote add origin https://github.com/Wadaane/Programming.git
