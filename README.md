@@ -6,8 +6,13 @@ Git Cheatsheet:
     
     git add file.py
     git commit -m "comment"
+    git reset HEAD~1 # Cancel local git
     git push 
 
-    git reset HEAD~1 # Cancel local git
-    git push -u origin master # if first time
+
+    # # First time
+    git add file.py
+    git commit -m "comment"
+    git remote add origin https://github.com/Wadaane/Programming.git
+    git push -u origin master
 
