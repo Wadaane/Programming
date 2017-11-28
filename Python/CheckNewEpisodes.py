@@ -82,7 +82,7 @@ def get_series_list():
         url = li.a.get('href')
 
         for title_path in titles_paths:
-            if title.startswith(title_path[0]):
+            if title.upper().startswith(title_path[0].upper()):
                 series.append([date, title, url])
 
     if len(series) < 1:
