@@ -117,8 +117,13 @@ def launch_browser():
         webbrowser.open(link, new=2)
 
 
-get_paths()
-get_downloaded_list()
-get_series_list()
-get_urls()
-launch_browser()
+def main():
+    get_paths()
+    get_downloaded_list()
+    get_series_list()
+    get_urls()
+    launch_browser()
+
+
+if __name__ == "__main__":
+    main()
