@@ -4,6 +4,7 @@ import webbrowser
 
 import requests
 from bs4 import BeautifulSoup
+from sys import exit
 
 paths = [
     'E:\Series\Comedie',
@@ -71,7 +72,6 @@ def get_series_list():
         r = requests.get('https://www.couchtuner.onl/new-releases-2')
     except:
         print('get_series_list(): Connexion error')
-        exit()
 
     soup = BeautifulSoup(r.text, 'html.parser')
     div = soup.find('div', attrs={'class': 'entry-content'})
@@ -87,7 +87,6 @@ def get_series_list():
 
     if len(series) < 1:
         print('No new Releases.')
-        exit()
 
 
 # Get the URLs for not downloaded episodes.
@@ -105,7 +104,6 @@ def get_urls():
 
     if len(urls) < 1:
         print('Nothing to download.')
-        exit()
 
 
 # Launch browser for each episode.
@@ -123,7 +121,9 @@ def main():
     get_series_list()
     get_urls()
     launch_browser()
-
+    print('Press Ctrl-Z to exit.')
+    while True:
+        pass
 
 if __name__ == "__main__":
     main()
