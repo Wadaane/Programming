@@ -12,7 +12,7 @@ Last modified: July 2017
 Website: www.zetcode.com
 """
 
-## pyinstaller -F --noconsole --add-data=logo.png;. tkinter_images_wadaane.py
+## pyinstaller -F --noconsole --add-data=logo.png;. --icon=icon.ico tkinter_images_wadaane.py
 import tkinter, PIL
 from tkinter import Tk, Canvas, Frame, BOTH, NW
 from PIL import Image, ImageTk
