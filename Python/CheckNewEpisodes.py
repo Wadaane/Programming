@@ -4,16 +4,17 @@ import webbrowser
 
 import requests
 from bs4 import BeautifulSoup
-from sys import exit
 
 paths = [
     'E:\Series\Comedie',
     'E:\Series\Autre'
 ]
+web_url = 'https://www.couchtuner.onl/new-releases-2'
 downloaded_list = []
 series = []
 urls = []
 titles_paths = []
+print('\t\tCheck For New Episodes')
 
 
 # Get paths of all series in the provided main folders.
@@ -22,9 +23,9 @@ def get_paths():
         names = os.listdir(path)
         for name in names:
             file_name, file_ext = os.path.splitext(name)
-            if file_ext == '':
+            if file_ext == '' or file_ext.startswith('. '):
                 titles_paths.append([name, path + '\\' + name])
-    
+
 
 # Get list of latest episodes we already have.
 def get_downloaded_list():
@@ -59,7 +60,7 @@ def get_downloaded_list():
             episode = pattern[1]
             number = ('S' + season + 'E' + episode).upper()
             index = file_name.upper().find(number)
-            file_name = file_name[:index].replace('.', ' ').strip()
+            file_name = file_name[:index - 1].strip()  # .replace('.', ' ').strip()
             number = 'Season ' + str(int(season)) + ' Episode ' + str(int(episode))
             downloaded_list.append([file_name, number])
         except:
@@ -69,7 +70,7 @@ def get_downloaded_list():
 # Get list of new releases.
 def get_series_list():
     try:
-        r = requests.get('https://www.couchtuner.onl/new-releases-2')
+        r = requests.get(web_url)
     except:
         print('get_series_list(): Connexion error')
 
@@ -84,7 +85,7 @@ def get_series_list():
         for title_path in titles_paths:
             if title.upper().startswith(title_path[0].upper()):
                 series.append([date, title, url])
-
+    # print(*series, sep='\n')
     if len(series) < 1:
         print('No new Releases.')
 
@@ -99,11 +100,13 @@ def get_urls():
                 ep_downloaded = int(''.join(re.findall(r'\d+', episode[1])))
                 ep_available = int(''.join(re.findall(r'\d+', number)))
                 if ep_downloaded < ep_available:
-                    if input(serie[0] + ' ' + serie[1] + ' Download ? y/n ') == 'y':
+                    if input('\t\t' + serie[0] + ' ' + serie[1] + ' Download ? y/n ') == 'y':
                         urls.append(serie[2])
 
     if len(urls) < 1:
-        print('Nothing to download.')
+        print('\tNothing to download.')
+    else:
+        print('\tOpen each episode page to manually start download ...')
 
 
 # Launch browser for each episode.
@@ -116,14 +119,16 @@ def launch_browser():
 
 
 def main():
+    print('\tGet latest downloaded episodes in local folders ...')
     get_paths()
     get_downloaded_list()
+    print('\tGet new releases list from website ...')
     get_series_list()
+    print('\tCheck if there is new episodes to download ...')
     get_urls()
     launch_browser()
-    print('Press Ctrl-Z to exit.')
-    while True:
-        pass
+    input('\tPress Enter to exit.')
+
 
 if __name__ == "__main__":
     main()
