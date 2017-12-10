@@ -8,7 +8,6 @@ import re
 # Exemple: "Game of throne S01E01.avi", "GOT_S01E02.avi", "Gameofthrones_S01E01.mkv"
 # renamed to "GOT S01E01.avi", "GOT S01E02.avi", "GOT S01E03.mkv"
 # pattern is "S01E" and offset is '2' and "newTitle" is "GOT "
-
 def rename_files():
     path = input('Path = ')
     new_title = input('Title = ')
