@@ -174,7 +174,7 @@ def main():
     # master.resizable(False, False)
     master.bind("<Escape>", lambda e: master.quit())
 
-    canvas = TkinterPedro(unit=75)
+    canvas = TkinterPedro(unit=75, callback=lambda a, b, c: print(canvas.angles.get()))
     canvas.pack(expand=False, fill=NONE)
 
     message = Label(master, text="Click and Drag to move")
