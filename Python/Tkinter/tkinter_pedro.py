@@ -1,24 +1,14 @@
-import os
 from math import pi, atan2, sin, cos, degrees, sqrt
 from tkinter import *
 
 
-# Needed for Pyinstaller's executable to retrieve file from system temporary folder.
-def resource_path(relative_path):
-    """ Get absolute path to resource, works for dev and for PyInstaller """
-    try:
-        # PyInstaller creates a temp folder and stores path in _MEIPASS
-        base_path = sys._MEIPASS
-    except Exception:
-        base_path = os.path.abspath(".")
-
-    return os.path.join(base_path, relative_path)
-
-
 class TkinterPedro(Canvas):
-    def __init__(self, unit):
+
+    def __init__(self, unit, callback):
         super().__init__()
 
+        self.angles = StringVar()
+        self.angles.trace('w', callback)
         self.bg = 'white'
         self.SIZE = unit
         self.text_size = int(self.SIZE / 6)
@@ -64,7 +54,7 @@ class TkinterPedro(Canvas):
                                           font=("Purisa", self.text_size),
                                           text='Base: {:>7.0f}°'.format(0))
 
-        self.slider = Scale(master, from_=0, to=180,
+        self.slider = Scale(self.master, from_=0, to=180,
                             orient=HORIZONTAL,
                             length=self.canvas_width,
                             command=self.slider_clicked,
@@ -78,11 +68,9 @@ class TkinterPedro(Canvas):
         self.angle_end = pi
         self.angle_elbow = pi
         self.angle_base = 0
+        self.selected = self.hand
         self.bind("<B1-Motion>", self.left_drag)
-        self.bind("<B3-Motion>", self.right_drag)
-        self.bind("<ButtonRelease-1>", self.release)
-        self.bind("<ButtonRelease-3>", self.release)
-        self.bind("<ButtonPress-3>", self.right_press)
+        self.bind("<ButtonPress-1>", self.left_press)
 
     @staticmethod
     def get_degrees(angle):
@@ -108,22 +96,15 @@ class TkinterPedro(Canvas):
         self.angle_base = self.slider.get()
         self.draw()
 
-    def release(self, event):
-        pass
-
-    def right_press(self, event):
-        pass
+    def left_press(self, event):
+        self.selected = self.find_closest(event.x, event.y)
 
     def left_drag(self, event):
-        self.rotate(self.hand, (event.x, event.y))
+        self.rotate(self.gettags(self.selected)[0], (event.x, event.y))
         self.draw()
 
-    def right_drag(self, event):
-        self.rotate(self.forearm, (event.x, event.y))
-        self.draw()
-
-    def rotate(self, _object, event):
-        if 'hand' in self.gettags(_object):
+    def rotate(self, tag, event):
+        if tag == 'hand':
             hypotenuse = self.length(self.elbow, self.end)
             angle = self.get_angle(self.elbow, event)
             y = hypotenuse * sin(angle)
@@ -132,7 +113,7 @@ class TkinterPedro(Canvas):
             self.end = x + self.elbow[0], y + self.elbow[1]
             self.angle_end = self.get_angle(self.origin, self.end)
 
-        if 'forearm' in self.gettags(_object):
+        if tag == 'forearm':
             angle0 = self.get_angle(self.origin, event)
             self.angle_end = angle0 - (self.angle_elbow - self.angle_end)
             self.angle_elbow = angle0
@@ -183,19 +164,24 @@ class TkinterPedro(Canvas):
                     self.elbow[0] + self.radius,
                     self.elbow[1] + self.radius)
 
+        self.angles.set((int(self.angle_base), int(self.angle_forearm), int(self.angle_hand)))
 
-master = Tk()
-master.title("Pedro")
-master.geometry('800x600')
-master.iconbitmap(default=resource_path('icon.ico'))
-master.bind("<Escape>", lambda e: master.quit())
-# master.resizable(False, False)
 
-canvas = TkinterPedro(unit=75)
-canvas.pack(expand=False, fill=NONE, anchor=N)
+def main():
+    master = Tk()
+    master.title("Pedro")
+    # master.geometry('800x600')
+    # master.resizable(False, False)
+    master.bind("<Escape>", lambda e: master.quit())
 
-message = Label(master, text="Press and Drag the mouse to move\n"
-                             "(Left Click: Hand, Right Click: Forearm")
-message.pack()  # side=BOTTOM
+    canvas = TkinterPedro(unit=75)
+    canvas.pack(expand=False, fill=NONE)
 
-mainloop()
+    message = Label(master, text="Click and Drag to move")
+    message.pack()  # side=BOTTOM
+
+    mainloop()
+
+
+if __name__ == '__main__':
+    main()
