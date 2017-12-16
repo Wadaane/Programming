@@ -16,7 +16,7 @@ def resource_path(relative_path):
     return os.path.join(base_path, relative_path)
 
 
-def callback(a, b, c):
+def callback(*args):
     angles = canvas.angles.get().split()
     print('Base: {}\n'
           'Forearm: {}\n'
