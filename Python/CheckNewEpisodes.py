@@ -109,12 +109,22 @@ def get_urls():
         print('\tOpen each episode page to manually start download ...')
 
 
+def get_video_url(page_url):
+    r = requests.get(page_url)
+    soup = BeautifulSoup(r.text, 'html.parser')
+    div = soup.find('div', attrs={'class': 'postTabs_divs postTabs_curr_div'})
+    iframe = div.find('iframe')
+    video_url = iframe.get('src')
+    return video_url
+
+
 # Launch browser for each episode.
 def launch_browser():
     for url in urls:
         r = requests.get(url)
         soup = BeautifulSoup(r.text, 'html.parser')
         link = soup.find('div', attrs={'class': 'postSDiv'}).a.get('href')
+        link = get_video_url(link)
         webbrowser.open(link, new=2)
 
 

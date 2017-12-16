@@ -1,5 +1,4 @@
 import os
-import sys
 from math import pi, atan2, sin, cos, degrees, sqrt
 from tkinter import *
 
@@ -17,20 +16,20 @@ def resource_path(relative_path):
 
 
 class TkinterPedro(Canvas):
-    def __init__(self, size):
+    def __init__(self, unit):
         super().__init__()
 
         self.bg = 'white'
-        self.SIZE = size
-        self.text_size = int(self.SIZE / 10)
+        self.SIZE = unit
+        self.text_size = int(self.SIZE / 6)
         self.canvas_width = 7 * self.SIZE
-        self.canvas_height = 5 * self.SIZE
+        self.canvas_height = 6 * self.SIZE
         self.config(width=self.canvas_width, height=self.canvas_height, bg=self.bg)
 
         self.radius = self.SIZE / 20
         self.length_forearm = 2 * self.SIZE
         self.length_hand = self.SIZE
-        self.origin = [self.canvas_width / 2, self.canvas_height - 1.5*self.SIZE]
+        self.origin = [self.canvas_width / 2, self.canvas_height - 2.25 * self.SIZE]
         self.elbow = [self.origin[0] - self.length_forearm, self.origin[1]]
         self.end = [self.elbow[0] + self.length_hand, self.elbow[1]]
 
@@ -68,9 +67,11 @@ class TkinterPedro(Canvas):
         self.slider = Scale(master, from_=0, to=180,
                             orient=HORIZONTAL,
                             length=self.canvas_width,
-                            command=self.slider_clicked)
-        self.create_window(self.origin[0], self.canvas_height,
-                           window=self.slider, anchor=N)
+                            command=self.slider_clicked,
+                            font=("Purisa", self.text_size),
+                            label='Base Angle: ')
+        self.create_window(self.origin[0], self.canvas_height + self.SIZE / 10,
+                           window=self.slider, anchor=S)
 
         self.angle_hand = self.get_angle(self.elbow, self.end)
         self.angle_forearm = self.get_angle(self.origin, self.elbow)
@@ -188,13 +189,13 @@ master.title("Pedro")
 master.geometry('800x600')
 master.iconbitmap(default=resource_path('icon.ico'))
 master.bind("<Escape>", lambda e: master.quit())
-master.resizable(False, False)
+# master.resizable(False, False)
 
-canvas = TkinterPedro(100)
+canvas = TkinterPedro(unit=75)
 canvas.pack(expand=False, fill=NONE, anchor=N)
 
 message = Label(master, text="Press and Drag the mouse to move\n"
                              "(Left Click: Hand, Right Click: Forearm")
-message.pack(side=BOTTOM)
+message.pack()  # side=BOTTOM
 
 mainloop()
