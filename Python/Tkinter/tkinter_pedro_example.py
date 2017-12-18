@@ -17,10 +17,10 @@ def resource_path(relative_path):
 
 
 def callback(*args):
-    angles = canvas.angles.get().split()
+    angle_base, angle_forearm, angle_hand = canvas.angles.get().split()
     print('Base: {}\n'
           'Forearm: {}\n'
-          'Hand: {}\n'.format(angles[0][1:-1], angles[1][1:-1], angles[2][1:-1]))
+          'Hand: {}\n'.format(angle_base.split('.')[0], angle_forearm.split('.')[0], angle_hand.split('.')[0]))
 
 
 root = Tk()
@@ -33,7 +33,10 @@ root.bind("<Escape>", lambda e: root.quit())
 message = Label(root, text="Click and Drag to move")
 message.pack()  # side=BOTTOM
 
-canvas = pedro.TkinterPedro(unit=75, callback=callback)
+canvas = pedro.TkinterPedro(unit=75, callback=callback,
+                            range_hand=(45, 160),
+                            range_forearm=(10, 160),
+                            range_base=(98, 160))
 canvas.pack(expand=False, fill=NONE)
 
 mainloop()

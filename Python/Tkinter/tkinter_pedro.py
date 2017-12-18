@@ -1,12 +1,15 @@
-from math import pi, atan2, sin, cos, degrees, sqrt
+from math import pi, atan2, sin, cos, degrees, sqrt, radians
 from tkinter import *
 
 
 class TkinterPedro(Canvas):
 
-    def __init__(self, unit, callback):
+    def __init__(self, unit, callback, range_hand, range_forearm, range_base):
         super().__init__()
 
+        self.range_base = range_base
+        self.range_hand = range_hand
+        self.range_forearm = range_forearm
         self.angles = StringVar()
         self.angles.trace('w', callback)
         self.bg = 'white'
@@ -20,8 +23,21 @@ class TkinterPedro(Canvas):
         self.length_forearm = 2 * self.SIZE
         self.length_hand = self.SIZE
         self.origin = [self.canvas_width / 2, self.canvas_height - 2.25 * self.SIZE]
-        self.elbow = [self.origin[0] - self.length_forearm, self.origin[1]]
-        self.end = [self.elbow[0] + self.length_hand, self.elbow[1]]
+
+        self.angle_hand = self.range_hand[0]
+        self.angle_forearm = self.range_forearm[0]
+        self.angle_elbow = - radians(180 - self.range_forearm[0])
+        self.angle_base = self.range_base[0]
+
+        x = self.length_forearm * cos(self.angle_elbow)
+        y = self.length_forearm * sin(self.angle_elbow)
+        self.elbow = x + self.origin[0], y + self.origin[1]
+
+        y = self.length_hand * sin(- radians(self.range_hand[0]) + self.angle_elbow)
+        x = self.length_hand * cos(- radians(self.range_hand[0]) + self.angle_elbow)
+        self.end = - x + self.elbow[0], - y + self.elbow[1]
+
+        self.angle_end = self.get_angle(self.origin, self.end)
 
         self.base = self.create_line(self.canvas_width / 2, self.canvas_height,
                                      self.origin[0], self.origin[1],
@@ -44,17 +60,17 @@ class TkinterPedro(Canvas):
         self.text_forearm = self.create_text((10, self.text_size),
                                              anchor=NW,
                                              font=("Purisa", self.text_size),
-                                             text='Forearm: {:>3.0f}°'.format(0))
+                                             text='Forearm: {:>3.0f}°'.format(self.range_forearm[0]))
         self.text_hand = self.create_text((10, 2 * 1.3 * self.text_size),
                                           anchor=NW,
                                           font=("Purisa", self.text_size),
-                                          text='Hand: {:>7.0f}°'.format(0))
+                                          text='Hand: {:>7.0f}°'.format(self.range_hand[0]))
         self.text_base = self.create_text((10, 3 * 1.3 * self.text_size),
                                           anchor=NW,
                                           font=("Purisa", self.text_size),
-                                          text='Base: {:>7.0f}°'.format(0))
+                                          text='Base: {:>7.0f}°'.format(self.range_base[0]))
 
-        self.slider = Scale(self.master, from_=0, to=180,
+        self.slider = Scale(self.master, from_=range_base[0], to=range_base[1],
                             orient=HORIZONTAL,
                             length=self.canvas_width,
                             command=self.slider_clicked,
@@ -63,11 +79,6 @@ class TkinterPedro(Canvas):
         self.create_window(self.origin[0], self.canvas_height + self.SIZE / 10,
                            window=self.slider, anchor=S)
 
-        self.angle_hand = self.get_angle(self.elbow, self.end)
-        self.angle_forearm = self.get_angle(self.origin, self.elbow)
-        self.angle_end = pi
-        self.angle_elbow = pi
-        self.angle_base = 0
         self.selected = self.hand
         self.bind("<B1-Motion>", self.left_drag)
         self.bind("<ButtonPress-1>", self.left_press)
@@ -100,43 +111,70 @@ class TkinterPedro(Canvas):
         self.selected = self.find_closest(event.x, event.y)
 
     def left_drag(self, event):
-        self.rotate(self.gettags(self.selected)[0], (event.x, event.y))
-        self.draw()
+        try:
+            self.rotate(self.gettags(self.selected)[0], (event.x, event.y))
+        finally:
+            self.draw()
 
     def rotate(self, tag, event):
         if tag == 'hand':
-            hypotenuse = self.length(self.elbow, self.end)
+            hypotenuse = self.length_hand
             angle = self.get_angle(self.elbow, event)
             y = hypotenuse * sin(angle)
             x = hypotenuse * cos(angle)
 
-            self.end = x + self.elbow[0], y + self.elbow[1]
-            self.angle_end = self.get_angle(self.origin, self.end)
+            end = x + self.elbow[0], y + self.elbow[1]
+            angle_end = self.get_angle(self.origin, end)
+            #  Use cosine and sine rule to get an accurate Hand angle (between Hand and Forearm)
+            sin_hand = ((self.length(self.origin, end))
+                        / (self.length(self.elbow, end))) * sin(self.angle_elbow - angle_end)
+            cos_hand = (self.length_hand ** 2
+                        + self.length_forearm ** 2
+                        - self.length(self.origin, end) ** 2) / (2 * self.length_hand * self.length_forearm)
+
+            angle = self.get_degrees(atan2(sin_hand, cos_hand))
+
+            if self.range_hand[0] <= angle <= self.range_hand[1] + 1:
+                self.angle_hand = int(angle)
+                self.end = end
+                self.angle_end = angle_end
 
         if tag == 'forearm':
-            angle0 = self.get_angle(self.origin, event)
-            self.angle_end = angle0 - (self.angle_elbow - self.angle_end)
-            self.angle_elbow = angle0
+            angle = self.get_angle(self.origin, event)
+            angle_end = angle - (self.angle_elbow - self.angle_end)
+            angle_elbow = angle
 
-            hypotenuse = self.length(self.origin, self.elbow)
-            x = hypotenuse * cos(self.angle_elbow)
-            y = hypotenuse * sin(self.angle_elbow)
-            self.elbow = x + self.origin[0], y + self.origin[1]
+            hypotenuse = self.length_forearm
+            x = hypotenuse * cos(angle_elbow)
+            y = hypotenuse * sin(angle_elbow)
+            elbow = x + self.origin[0], y + self.origin[1]
 
             # Update Hand
             hypotenuse = self.length(self.origin, self.end)
-            x3 = hypotenuse * cos(self.angle_end)
-            y3 = hypotenuse * sin(self.angle_end)
-            self.end = x3 + self.origin[0], y3 + self.origin[1]
+            x3 = hypotenuse * cos(angle_end)
+            y3 = hypotenuse * sin(angle_end)
+            end = x3 + self.origin[0], y3 + self.origin[1]
 
-        #  Use cosine and sine rule to get an accurate Hand angle (between Hand and Forearm)
-        sin_hand = ((self.length(self.origin, self.end))
-                    / (self.length(self.elbow, self.end))) * sin(self.angle_elbow - self.angle_end)
-        cos_hand = (self.length_hand ** 2
-                    + self.length_forearm ** 2
-                    - self.length(self.origin, self.end) ** 2) / (2 * self.length_hand * self.length_forearm)
-        self.angle_hand = self.get_degrees(atan2(sin_hand, cos_hand))
-        self.angle_forearm = self.get_degrees(- self.angle_elbow + pi)
+            #  Use cosine and sine rule to get an accurate Hand angle (between Hand and Forearm)
+            sin_hand = ((self.length(self.origin, end))
+                        / self.length_hand) * sin(angle_elbow - angle_end)
+            cos_hand = (self.length_hand ** 2
+                        + self.length_forearm ** 2
+                        - self.length(self.origin, end) ** 2) / (2 * self.length_hand * self.length_forearm)
+
+            angle = self.get_degrees(- angle_elbow + pi)
+            if self.range_forearm[0] <= angle <= self.range_forearm[1] + 1:
+                self.angle_forearm = int(angle)
+                self.angle_end = angle_end
+                self.angle_elbow = angle_elbow
+                self.elbow = elbow
+                self.end = end
+
+                angle1 = self.get_degrees(atan2(sin_hand, cos_hand))
+
+                self.angle_hand = int(angle1)
+                self.end = end
+                self.angle_end = angle_end
 
     def draw(self):
         self.length_forearm = self.length(self.origin, self.elbow)
@@ -164,7 +202,7 @@ class TkinterPedro(Canvas):
                     self.elbow[0] + self.radius,
                     self.elbow[1] + self.radius)
 
-        self.angles.set((int(self.angle_base), int(self.angle_forearm), int(self.angle_hand)))
+        self.angles.set('{} {} {} '.format(self.angle_base, self.angle_forearm, self.angle_hand))
 
 
 def main():
@@ -174,7 +212,11 @@ def main():
     # master.resizable(False, False)
     master.bind("<Escape>", lambda e: master.quit())
 
-    canvas = TkinterPedro(unit=50, callback=lambda *args: print(canvas.angles.get()))
+    canvas = TkinterPedro(unit=50,
+                          callback=lambda *args: print(canvas.angles.get()),
+                          range_hand=(0, 180),
+                          range_forearm=(0, 160),
+                          range_base=(0, 160))
     canvas.pack(expand=False, fill=NONE)
 
     message = Label(master, text="Click and Drag to move")
