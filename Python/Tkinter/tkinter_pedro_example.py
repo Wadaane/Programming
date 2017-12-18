@@ -34,9 +34,9 @@ message = Label(root, text="Click and Drag to move")
 message.pack()  # side=BOTTOM
 
 canvas = pedro.TkinterPedro(unit=75, callback=callback,
-                            range_hand=(45, 160),
-                            range_forearm=(10, 160),
-                            range_base=(98, 160))
+                            range_hand=(45, 215),
+                            range_forearm=(0, 170),
+                            range_base=(0, 170))
 canvas.pack(expand=False, fill=NONE)
 
 mainloop()

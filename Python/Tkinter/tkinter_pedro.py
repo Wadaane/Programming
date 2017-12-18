@@ -12,6 +12,7 @@ class TkinterPedro(Canvas):
         self.range_forearm = range_forearm
         self.angles = StringVar()
         self.angles.trace('w', callback)
+        self.speed = 0.1
         self.bg = 'white'
         self.SIZE = unit
         self.text_size = int(self.SIZE / 6)
@@ -60,17 +61,17 @@ class TkinterPedro(Canvas):
         self.text_forearm = self.create_text((10, self.text_size),
                                              anchor=NW,
                                              font=("Purisa", self.text_size),
-                                             text='Forearm: {:>3.0f}°'.format(self.range_forearm[0]))
+                                             text='Forearm: {:>3.0f}°'.format(0))
         self.text_hand = self.create_text((10, 2 * 1.3 * self.text_size),
                                           anchor=NW,
                                           font=("Purisa", self.text_size),
-                                          text='Hand: {:>7.0f}°'.format(self.range_hand[0]))
+                                          text='Hand: {:>7.0f}°'.format(0))
         self.text_base = self.create_text((10, 3 * 1.3 * self.text_size),
                                           anchor=NW,
                                           font=("Purisa", self.text_size),
-                                          text='Base: {:>7.0f}°'.format(self.range_base[0]))
+                                          text='Base: {:>7.0f}°'.format(0))
 
-        self.slider = Scale(self.master, from_=range_base[0], to=range_base[1],
+        self.slider = Scale(self.master, from_=0, to=(range_base[1] - range_base[0]),
                             orient=HORIZONTAL,
                             length=self.canvas_width,
                             command=self.slider_clicked,
@@ -82,6 +83,9 @@ class TkinterPedro(Canvas):
         self.selected = self.hand
         self.bind("<B1-Motion>", self.left_drag)
         self.bind("<ButtonPress-1>", self.left_press)
+
+    def lerp(self, start, end, percent):
+        return start + percent * (end - start)
 
     @staticmethod
     def get_degrees(angle):
@@ -163,21 +167,21 @@ class TkinterPedro(Canvas):
                         - self.length(self.origin, end) ** 2) / (2 * self.length_hand * self.length_forearm)
 
             angle = self.get_degrees(- angle_elbow + pi)
+            angle1 = self.get_degrees(atan2(sin_hand, cos_hand))
+
             if self.range_forearm[0] <= angle <= self.range_forearm[1] + 1:
                 self.angle_forearm = int(angle)
+                self.angle_hand = int(angle1)
                 self.angle_end = angle_end
                 self.angle_elbow = angle_elbow
                 self.elbow = elbow
                 self.end = end
 
-                angle1 = self.get_degrees(atan2(sin_hand, cos_hand))
-
-                self.angle_hand = int(angle1)
-                self.end = end
-                self.angle_end = angle_end
-
     def draw(self):
         self.length_forearm = self.length(self.origin, self.elbow)
+        self.angles.set('{} {} {} '.format(self.angle_base - self.range_base[0],
+                                           self.angle_forearm - self.range_forearm[0],
+                                           self.angle_hand - self.range_hand[0]))
 
         #  Forearm
         self.coords(self.forearm,
@@ -185,7 +189,6 @@ class TkinterPedro(Canvas):
                     self.origin[1],
                     self.elbow[0],
                     self.elbow[1])
-        self.itemconfig(self.text_forearm, text='Forearm: {:>3.0f}°'.format(self.angle_forearm))
 
         #  Hand
         self.coords(self.hand,
@@ -193,16 +196,15 @@ class TkinterPedro(Canvas):
                     self.elbow[1],
                     self.end[0],
                     self.end[1])
-        self.itemconfig(self.text_hand, text='Hand: {:>7.0f}°'.format(self.angle_hand))
-        self.itemconfig(self.text_base, text='Base: {:>7.0f}°'.format(self.angle_base))
+        self.itemconfig(self.text_base, text='Base: {:>7.0f}°'.format(self.angle_base - self.range_base[0]))
+        self.itemconfig(self.text_forearm, text='Forearm: {:>3.0f}°'.format(self.angle_forearm - self.range_forearm[0]))
+        self.itemconfig(self.text_hand, text='Hand: {:>7.0f}°'.format(self.angle_hand - self.range_hand[0]))
 
         self.coords(self.oval_elbow,
                     self.elbow[0] - self.radius,
                     self.elbow[1] - self.radius,
                     self.elbow[0] + self.radius,
                     self.elbow[1] + self.radius)
-
-        self.angles.set('{} {} {} '.format(self.angle_base, self.angle_forearm, self.angle_hand))
 
 
 def main():
@@ -214,9 +216,9 @@ def main():
 
     canvas = TkinterPedro(unit=50,
                           callback=lambda *args: print(canvas.angles.get()),
-                          range_hand=(0, 180),
-                          range_forearm=(0, 160),
-                          range_base=(0, 160))
+                          range_hand=(45, 215),
+                          range_forearm=(0, 170),
+                          range_base=(0, 170))
     canvas.pack(expand=False, fill=NONE)
 
     message = Label(master, text="Click and Drag to move")
