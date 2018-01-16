@@ -210,11 +210,13 @@ class TkinterPedro(Canvas):
 def main():
     master = Tk()
     master.title("Pedro")
+    screen_width = master.winfo_screenwidth()
+    screen_height = master.winfo_screenheight()
     # master.geometry('800x600')
-    # master.resizable(False, False)
+    master.resizable(False, False)
     master.bind("<Escape>", lambda e: master.quit())
 
-    canvas = TkinterPedro(unit=50,
+    canvas = TkinterPedro(unit=int(screen_width/15),
                           callback=lambda *args: print(canvas.angles.get()),
                           range_hand=(45, 215),
                           range_forearm=(0, 170),
