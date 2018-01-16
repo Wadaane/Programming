@@ -1,6 +1,9 @@
 from math import pi, atan2, sin, cos, degrees, sqrt, radians
 from tkinter import *
 
+global canvas
+canvas = None
+
 
 class TkinterPedro(Canvas):
 
@@ -84,7 +87,8 @@ class TkinterPedro(Canvas):
         self.bind("<B1-Motion>", self.left_drag)
         self.bind("<ButtonPress-1>", self.left_press)
 
-    def lerp(self, start, end, percent):
+    @staticmethod
+    def lerp(start, end, percent):
         return start + percent * (end - start)
 
     @staticmethod
@@ -207,24 +211,30 @@ class TkinterPedro(Canvas):
                     self.elbow[1] + self.radius)
 
 
+def send_angles(*args):
+    base, forearm, hand = canvas.angles.get().strip().split(' ')
+    print('base:', base, 'Forearm:', forearm, 'Hand:', hand)
+
+
 def main():
     master = Tk()
     master.title("Pedro")
     screen_width = master.winfo_screenwidth()
-    screen_height = master.winfo_screenheight()
+    # screen_height = master.winfo_screenheight()
     # master.geometry('800x600')
     master.resizable(False, False)
     master.bind("<Escape>", lambda e: master.quit())
 
-    canvas = TkinterPedro(unit=int(screen_width/15),
-                          callback=lambda *args: print(canvas.angles.get()),
+    global canvas
+    canvas = TkinterPedro(unit=int(screen_width / 20),
+                          callback=send_angles,
                           range_hand=(45, 215),
                           range_forearm=(0, 170),
                           range_base=(0, 170))
     canvas.pack(expand=False, fill=NONE)
 
     message = Label(master, text="Click and Drag to move")
-    message.pack()  # side=BOTTOM
+    message.pack()
 
     mainloop()
 
