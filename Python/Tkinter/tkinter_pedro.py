@@ -32,6 +32,7 @@ class TkinterPedro(Canvas):
         self.angle_forearm = self.range_forearm[0]
         self.angle_elbow = - radians(180 - self.range_forearm[0])
         self.angle_base = self.range_base[0]
+        self.angle_end_point = 0
 
         x = self.length_forearm * cos(self.angle_elbow)
         y = self.length_forearm * sin(self.angle_elbow)
@@ -73,15 +74,30 @@ class TkinterPedro(Canvas):
                                           anchor=NW,
                                           font=("Purisa", self.text_size),
                                           text='Base: {:>7.0f}°'.format(0))
+        self.text_end_point = self.create_text((10, 4 * 1.3 * self.text_size),
+                                               anchor=NW,
+                                               font=("Purisa", self.text_size),
+                                               text='End Point: {:>7.0f}°'.format(0))
 
-        self.slider = Scale(self.master, from_=0, to=(range_base[1] - range_base[0]),
-                            orient=HORIZONTAL,
-                            length=self.canvas_width,
-                            command=self.slider_clicked,
-                            font=("Purisa", self.text_size),
-                            label='Base Angle: ')
-        self.create_window(self.origin[0], self.canvas_height + self.SIZE / 10,
-                           window=self.slider, anchor=S)
+        self.slider_base = Scale(self.master, from_=0, to=(range_base[1] - range_base[0]),
+                                 orient=HORIZONTAL,
+                                 length=3 * self.canvas_width / 4,
+                                 command=self.slider_clicked,
+                                 font=("Purisa", self.text_size),
+                                 label='Base Angle: ')
+
+        self.create_window(0, self.canvas_height + self.SIZE / 10,
+                           window=self.slider_base, anchor=SW)
+
+        self.slider_end_point = Scale(self.master, from_=0, to=100,
+                                      orient=HORIZONTAL,
+                                      length=self.canvas_width / 4,
+                                      command=self.slider_end_point_clicked,
+                                      font=("Purisa", self.text_size),
+                                      label='End Point: ')
+
+        self.create_window(3 * self.canvas_width / 4, self.canvas_height + self.SIZE / 10,
+                           window=self.slider_end_point, anchor=SW)
 
         self.selected = self.hand
         self.bind("<B1-Motion>", self.left_drag)
@@ -112,7 +128,10 @@ class TkinterPedro(Canvas):
                     + (end[1] - origin[1]) ** 2)
 
     def slider_clicked(self, event):
-        self.rotate('base', self.slider.get())
+        self.rotate('base', self.slider_base.get())
+
+    def slider_end_point_clicked(self, event):
+        self.rotate('end_point', self.slider_end_point.get())
 
     def left_press(self, event):
         self.selected = self.find_closest(event.x, event.y)
@@ -121,9 +140,13 @@ class TkinterPedro(Canvas):
         self.rotate(self.gettags(self.selected)[0], (event.x, event.y))
 
     def rotate(self, tag, event):
+        if tag == 'end_point':
+            self.angle_end_point = event
+            self.slider_end_point.set(event)
+
         if tag == 'base':
             self.angle_base = event
-            self.slider.set(event)
+            self.slider_base.set(event)
 
         if tag == 'hand':
             hypotenuse = self.length_hand
@@ -184,6 +207,8 @@ class TkinterPedro(Canvas):
         self.draw()
 
     def rotate_feedback(self, tag, angle):
+        if tag == 'end_point':
+            self.rotate('end_point', angle)
         if tag == 'base':
             self.rotate('base', angle)
 
@@ -209,9 +234,10 @@ class TkinterPedro(Canvas):
 
     def draw(self):
         self.length_forearm = self.length(self.origin, self.elbow)
-        self.angles.set('{} {} {} '.format(self.angle_base - self.range_base[0],
-                                           self.angle_forearm - self.range_forearm[0],
-                                           self.angle_hand - self.range_hand[0]))
+        self.angles.set('{} {} {} {} '.format(self.angle_end_point,
+                                              self.angle_base - self.range_base[0],
+                                              self.angle_forearm - self.range_forearm[0],
+                                              self.angle_hand - self.range_hand[0]))
 
         #  Forearm
         self.coords(self.forearm,
@@ -226,6 +252,7 @@ class TkinterPedro(Canvas):
                     self.elbow[1],
                     self.end[0],
                     self.end[1])
+        self.itemconfig(self.text_end_point, text='End Point: {:>7.0f}°'.format(self.angle_end_point))
         self.itemconfig(self.text_base, text='Base: {:>7.0f}°'.format(self.angle_base - self.range_base[0]))
         self.itemconfig(self.text_forearm, text='Forearm: {:>3.0f}°'.format(self.angle_forearm - self.range_forearm[0]))
         self.itemconfig(self.text_hand, text='Hand: {:>7.0f}°'.format(self.angle_hand - self.range_hand[0]))
@@ -242,9 +269,9 @@ def set_angles(tag, angle):
 
 
 def send_angles(*args):
-    base, forearm, hand = canvas.angles.get().strip().split(' ')
+    end_point, base, forearm, hand = canvas.angles.get().strip().split(' ')
     # Do Something with the angles.
-    print('base:', base, 'Forearm:', forearm, 'Hand:', hand)
+    print('end_point:', end_point, 'base:', base, 'Forearm:', forearm, 'Hand:', hand)
 
 
 def main():
@@ -253,7 +280,7 @@ def main():
     screen_width = master.winfo_screenwidth()
     # screen_height = master.winfo_screenheight()
     # master.geometry('800x600')
-    master.resizable(False, False)
+    master.resizable(True, True)
     master.bind("<Escape>", lambda e: master.quit())
 
     global canvas
