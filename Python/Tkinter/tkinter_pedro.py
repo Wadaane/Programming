@@ -112,19 +112,19 @@ class TkinterPedro(Canvas):
                     + (end[1] - origin[1]) ** 2)
 
     def slider_clicked(self, event):
-        self.angle_base = self.slider.get()
-        self.draw()
+        self.rotate('base', self.slider.get())
 
     def left_press(self, event):
         self.selected = self.find_closest(event.x, event.y)
 
     def left_drag(self, event):
-        try:
-            self.rotate(self.gettags(self.selected)[0], (event.x, event.y))
-        finally:
-            self.draw()
+        self.rotate(self.gettags(self.selected)[0], (event.x, event.y))
 
     def rotate(self, tag, event):
+        if tag == 'base':
+            self.angle_base = event
+            self.slider.set(event)
+
         if tag == 'hand':
             hypotenuse = self.length_hand
             angle = self.get_angle(self.elbow, event)
@@ -181,6 +181,32 @@ class TkinterPedro(Canvas):
                 self.elbow = elbow
                 self.end = end
 
+        self.draw()
+
+    def rotate_feedback(self, tag, angle):
+        if tag == 'base':
+            self.rotate('base', angle)
+
+        if tag == 'hand':
+            hypotenuse = self.length_hand
+            angle = - radians(self.range_hand[0] + angle)
+            y = hypotenuse * sin(angle)
+            x = hypotenuse * cos(angle)
+
+            end = x + self.elbow[0], y + self.elbow[1]
+
+            self.rotate(tag, end)
+
+        if tag == 'forearm':
+            hypotenuse = self.length_forearm
+            angle = pi + radians(self.range_forearm[0] + angle)
+            y = hypotenuse * sin(angle)
+            x = hypotenuse * cos(angle)
+
+            elbow = x + self.origin[0], y + self.origin[1]
+
+            self.rotate(tag, elbow)
+
     def draw(self):
         self.length_forearm = self.length(self.origin, self.elbow)
         self.angles.set('{} {} {} '.format(self.angle_base - self.range_base[0],
@@ -211,8 +237,13 @@ class TkinterPedro(Canvas):
                     self.elbow[1] + self.radius)
 
 
+def set_angles(tag, angle):
+    canvas.rotate_feedback(tag, angle)
+
+
 def send_angles(*args):
     base, forearm, hand = canvas.angles.get().strip().split(' ')
+    # Do Something with the angles.
     print('base:', base, 'Forearm:', forearm, 'Hand:', hand)
 
 
@@ -228,9 +259,9 @@ def main():
     global canvas
     canvas = TkinterPedro(unit=int(screen_width / 20),
                           callback=send_angles,
-                          range_hand=(45, 215),
-                          range_forearm=(0, 170),
-                          range_base=(0, 170))
+                          range_hand=(45, 45 + 170),
+                          range_forearm=(0, 0 + 170),
+                          range_base=(0, 0 + 170))
     canvas.pack(expand=False, fill=NONE)
 
     message = Label(master, text="Click and Drag to move")
