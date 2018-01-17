@@ -56,8 +56,14 @@ def get_downloaded_list():
 
         try:
             pattern = re.findall(r'\d+', file_name)
-            season = pattern[0]
-            episode = pattern[1]
+
+            if file_name.startswith(pattern[0]):
+                season = pattern[1]
+                episode = pattern[2]
+            else:
+                season = pattern[0]
+                episode = pattern[1]
+
             number = ('S' + season + 'E' + episode).upper()
             index = file_name.upper().find(number)
             file_name = file_name[:index - 1].strip()  # .replace('.', ' ').strip()
