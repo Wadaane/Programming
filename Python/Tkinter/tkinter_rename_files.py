@@ -1,8 +1,21 @@
 import os
-import sys
 from tkinter import *
 from tkinter import ttk
 from tkinter.filedialog import askdirectory
+
+files = []
+pattern = ''
+new_names = []
+path = ''
+_width = 0
+_height = 0
+temp = ''
+text_before = None
+text_new = None
+entry_title = None
+entry_pattern = None
+entry_new_pattern = None
+entry_offset = None
 
 
 def resource_path(relative_path):
@@ -14,22 +27,6 @@ def resource_path(relative_path):
         base_path = os.path.abspath(".")
 
     return os.path.join(base_path, relative_path)
-
-
-root = Tk()
-root.iconbitmap(default=resource_path('icon.ico'))
-Title = root.title("Rename Files")
-msg_old = StringVar()
-msg_old.set("Old")
-msg_new = StringVar()
-msg_new.set("New")
-files = []
-pattern = ''
-new_names = []
-path = ''
-_width = 0
-_height = 0
-temp = ''
 
 
 def open_directory():
@@ -103,6 +100,7 @@ def rename_files():
     return new_names
 
 
+# TODO: print on a label if errors occurs during renaming.
 def save_changes():
     i = 0
     for f in files:
@@ -112,10 +110,6 @@ def save_changes():
             i = i + 1
 
 
-button_open = ttk.Button(root, text="Open", command=open_directory)
-button_open.grid(row=0, column=0, sticky="nsew", padx=10, pady=10, columnspan=4)
-
-
 def clear(e):
     global tmp
     if e.widget.get().endswith('...'):
@@ -123,67 +117,85 @@ def clear(e):
         e.widget.delete(0, END)
 
 
-label_title = ttk.Label(root, text='Title')
-label_title.grid(row=1, column=0, sticky="nsew", padx=5, pady=5)
+def main():
+    global text_before, text_new, entry_title, entry_pattern, entry_new_pattern, entry_offset
 
-entry_title = Entry(root)
-entry_title.insert(0, 'Title ...')
-entry_title.bind("<Button-1>", clear)
-entry_title.grid(row=1, column=1, sticky="nsew", padx=5, pady=5)
+    root = Tk()
+    root.iconbitmap(default=resource_path('icon.ico'))
+    root.title("Rename Files")
+    msg_old = StringVar()
+    msg_old.set("Old")
+    msg_new = StringVar()
+    msg_new.set("New")
 
-label_pattern = ttk.Label(root, text='Pattern')
-label_pattern.grid(row=1, column=2, sticky="nsew", padx=5, pady=5)
+    button_open = ttk.Button(root, text="Open", command=open_directory)
+    button_open.grid(row=0, column=0, sticky="nsew", padx=10, pady=10, columnspan=2)
 
-entry_pattern = Entry(root)
-entry_pattern.insert(0, 'Pattern ...')
-entry_pattern.bind("<Button-1>", clear)
-entry_pattern.grid(row=1, column=3, sticky="nsew", padx=5, pady=5)
+    button_rename = ttk.Button(root, text="Rename", command=rename_files)
+    button_rename.grid(row=0, column=2, sticky="nsew", padx=10, pady=10, columnspan=1)
 
-label_offset = ttk.Label(root, text='Offset')
-label_offset.grid(row=2, column=0, sticky="nsew", padx=5, pady=5)
+    button_save = ttk.Button(root, text="Save", command=save_changes)
+    button_save.grid(row=0, column=3, sticky="nsew", padx=10, pady=10, columnspan=2)
 
-entry_offset = Entry(root)
-entry_offset.insert(0, 'Offset ...')
-entry_offset.bind("<Button-1>", clear)
-entry_offset.grid(row=2, column=1, sticky="nsew", padx=5, pady=5)
+    label_title = ttk.Label(root, text='Title')
+    label_title.grid(row=1, column=0, sticky="nsew", padx=5, pady=5)
 
-label_new_pattern = ttk.Label(root, text='New Pattern')
-label_new_pattern.grid(row=2, column=2, sticky="nsew", padx=5, pady=5)
+    entry_title = ttk.Entry(root)
+    entry_title.insert(0, 'Title ...')
+    entry_title.bind("<Button-1>", clear)
+    entry_title.grid(row=1, column=1, sticky="nsew", padx=5, pady=5)
 
-entry_new_pattern = Entry(root)
-entry_new_pattern.insert(0, 'New Pattern ...')
-entry_new_pattern.bind("<Button-1>", clear)
-entry_new_pattern.grid(row=2, column=3, sticky="nsew", padx=5, pady=5)
+    label_pattern = ttk.Label(root, text='Pattern')
+    label_pattern.grid(row=1, column=2, sticky="nsew", padx=5, pady=5)
 
-label_before = ttk.Label(root, text='Name')
-label_before.grid(row=3, column=0, sticky="nsew", padx=5, pady=1, columnspan=2)
+    entry_pattern = ttk.Entry(root)
+    entry_pattern.insert(0, 'Pattern ...')
+    entry_pattern.bind("<Button-1>", clear)
+    entry_pattern.grid(row=1, column=3, sticky="nsew", padx=5, pady=5)
 
-text_before = Text(root, height=1, width=20)
-text_before.grid(row=4, column=0, sticky="nw", padx=5, pady=1, columnspan=2)
-text_before.config(state=DISABLED)
+    label_offset = ttk.Label(root, text='Offset')
+    label_offset.grid(row=2, column=0, sticky="nsew", padx=5, pady=5)
 
-label_New = ttk.Label(root, text='Name')
-label_New.grid(row=3, column=2, sticky="nsew", padx=5, pady=1, columnspan=2)
+    entry_offset = ttk.Entry(root)
+    entry_offset.insert(0, 'Offset ...')
+    entry_offset.bind("<Button-1>", clear)
+    entry_offset.grid(row=2, column=1, sticky="nsew", padx=5, pady=5)
 
-text_new = Text(root, height=1, width=20)
-text_new.grid(row=4, column=2, sticky="nw", padx=5, pady=1, columnspan=2)
-text_new.config(state=DISABLED)
+    label_new_pattern = ttk.Label(root, text='New Pattern')
+    label_new_pattern.grid(row=2, column=2, sticky="nsew", padx=5, pady=5)
 
-button_rename = ttk.Button(root, text="Rename", command=rename_files)
-button_rename.grid(row=5, column=0, sticky="ns", padx=5, pady=5, columnspan=2)
+    entry_new_pattern = ttk.Entry(root)
+    entry_new_pattern.insert(0, 'New Pattern ...')
+    entry_new_pattern.bind("<Button-1>", clear)
+    entry_new_pattern.grid(row=2, column=3, sticky="nsew", padx=5, pady=5)
 
-button_save = ttk.Button(root, text="Save", command=save_changes)
-button_save.grid(row=5, column=2, sticky="ns", padx=5, pady=5, columnspan=2)
+    label_before = ttk.Label(root, text='Name')
+    label_before.grid(row=3, column=0, sticky="nsew", padx=5, pady=1, columnspan=2)
 
-# Menu Bar
-menu = Menu(root)
-root.config(menu=menu)
+    text_before = Text(root, height=1, width=20)
+    text_before.grid(row=4, column=0, sticky="nw", padx=5, pady=15, columnspan=2)
+    text_before.config(state=DISABLED)
 
-file = Menu(menu)
+    label_new = ttk.Label(root, text='Name')
+    label_new.grid(row=3, column=2, sticky="nsew", padx=5, pady=1, columnspan=2)
 
-file.add_command(label='Open', command=open_directory)
-file.add_command(label='Save', command=save_changes)
-file.add_command(label='Exit', command=lambda: sys.exit())
+    text_new = Text(root, height=1, width=20)
+    text_new.grid(row=4, column=2, sticky="nw", padx=5, pady=15, columnspan=2)
+    text_new.config(state=DISABLED)
 
-menu.add_cascade(label='File', menu=file)
-root.mainloop()
+    # Menu Bar
+    menu = Menu(root)
+    root.config(menu=menu)
+
+    file = Menu(menu)
+
+    file.add_command(label='Open', command=open_directory)
+    file.add_command(label='Save', command=save_changes)
+    file.add_command(label='Exit', command=lambda: sys.exit())
+
+    menu.add_cascade(label='File', menu=file)
+    root.mainloop()
+
+
+if __name__ == '__main__':
+    main()

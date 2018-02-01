@@ -17,8 +17,10 @@ titles_paths = []
 print('\t\tCheck For New Episodes')
 
 
-# Get paths of all series in the provided main folders.
 def get_paths():
+    """
+    Get paths of all series in the provided main folders.
+    """
     for path in paths:
         names = os.listdir(path)
         for name in names:
@@ -27,8 +29,10 @@ def get_paths():
                 titles_paths.append([name, path + '\\' + name])
 
 
-# Get list of latest episodes we already have.
 def get_downloaded_list():
+    """
+    Get list of latest episode per series.
+    """
     file = 'None'
     for title_path in titles_paths:
         # title = title_path[0]
@@ -73,8 +77,10 @@ def get_downloaded_list():
             print('get_downloaded_list(): File Error: ' + file)
 
 
-# Get list of new releases.
 def get_series_list():
+    """
+    Get list of new releases.
+    """
     try:
         r = requests.get(web_url)
     except:
@@ -96,8 +102,10 @@ def get_series_list():
         print('No new Releases.')
 
 
-# Get the URLs for not downloaded episodes.
 def get_urls():
+    """
+    Get the URLs for not downloaded episodes.
+    """
     for serie in series:
         title = serie[1]
         number = title.strip()[title.find('Season'):]
@@ -116,6 +124,11 @@ def get_urls():
 
 
 def get_video_url(page_url):
+    """
+    Get the video URL, to be launched.
+    :param page_url: Video web page.
+    :return video_url: Video file URL.
+    """
     r = requests.get(page_url)
     soup = BeautifulSoup(r.text, 'html.parser')
     div = soup.find('div', attrs={'class': 'postTabs_divs postTabs_curr_div'})
@@ -124,8 +137,10 @@ def get_video_url(page_url):
     return video_url
 
 
-# Launch browser for each episode.
 def launch_browser():
+    """
+    Launch browser for each episode.
+    """
     for url in urls:
         r = requests.get(url)
         soup = BeautifulSoup(r.text, 'html.parser')
