@@ -2,6 +2,7 @@ import os
 from tkinter import *
 from tkinter import ttk
 from tkinter.filedialog import askdirectory
+from tkinter.scrolledtext import ScrolledText
 
 files = []
 pattern = ''
@@ -9,6 +10,7 @@ new_names = []
 path = ''
 _width = 0
 _height = 0
+screen_lines = 0
 temp = ''
 text_before = None
 text_new = None
@@ -16,6 +18,7 @@ entry_title = None
 entry_pattern = None
 entry_new_pattern = None
 entry_offset = None
+root = None
 
 
 def resource_path(relative_path):
@@ -46,7 +49,8 @@ def get_files():
         _width = max(_width, len(line))
 
     msg = msg[:-1]
-    _height = max(_height, len(files))
+    # _height = max(_height, len(files))
+    _height = min(screen_lines / 2, len(files))
     text_before.config(state=NORMAL)
     text_new.config(state=NORMAL)
     text_before.delete(1.0, END)
@@ -90,7 +94,7 @@ def rename_files():
         _width = max(_width, len(line))
 
     msg = msg[:-1]
-    _height = max(_height, len(files))
+    _height = min(screen_lines / 2, len(files))
     text_before.config(state=NORMAL)
     text_new.config(state=NORMAL)
     text_new.delete(1.0, END)
@@ -118,7 +122,7 @@ def clear(e):
 
 
 def main():
-    global text_before, text_new, entry_title, entry_pattern, entry_new_pattern, entry_offset
+    global screen_lines, root, text_before, text_new, entry_title, entry_pattern, entry_new_pattern, entry_offset
 
     root = Tk()
     root.iconbitmap(default=resource_path('icon.ico'))
@@ -172,14 +176,15 @@ def main():
     label_before = ttk.Label(root, text='Name')
     label_before.grid(row=3, column=0, sticky="nsew", padx=5, pady=1, columnspan=2)
 
-    text_before = Text(root, height=1, width=20)
+    text_before = ScrolledText(root, height=1, width=20)
     text_before.grid(row=4, column=0, sticky="nw", padx=5, pady=15, columnspan=2)
     text_before.config(state=DISABLED)
+    screen_lines = root.winfo_screenheight() / text_before.winfo_reqheight()
 
     label_new = ttk.Label(root, text='Name')
     label_new.grid(row=3, column=2, sticky="nsew", padx=5, pady=1, columnspan=2)
 
-    text_new = Text(root, height=1, width=20)
+    text_new = ScrolledText(root, height=1, width=20)
     text_new.grid(row=4, column=2, sticky="nw", padx=5, pady=15, columnspan=2)
     text_new.config(state=DISABLED)
 
