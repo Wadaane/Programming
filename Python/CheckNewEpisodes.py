@@ -9,7 +9,8 @@ paths = [
     'E:\Series\Comedie',
     'E:\Series\Autre'
 ]
-web_url = 'https://www.couchtuner.onl/new-releases-2'
+# web_url = 'https://www.couchtuner.onl/new-releases-2'
+web_url = 'http://www.couch-tuner.la/tv-lists/'
 downloaded_list = []
 series = []
 urls = []
@@ -84,22 +85,23 @@ def get_series_list():
     try:
         r = requests.get(web_url)
     except:
-        print('get_series_list(): Connexion error')
+        print('\tConnexion error')
+        return False
 
     soup = BeautifulSoup(r.text, 'html.parser')
-    div = soup.find('div', attrs={'class': 'entry-content'})
-    lis = div.find_all('li')
-
-    for li in lis:
-        date, title, spec = li.find_all(text=True)
-        url = li.a.get('href')
+    _as = soup.find_all('a')
+    for _a in _as:
+        text = _a.find_all(text=True)
+        text = ' '.join(text)
+        url = _a.get('href')
 
         for title_path in titles_paths:
-            if title.upper().startswith(title_path[0].upper()):
-                series.append([date, title, url])
-    # print(*series, sep='\n')
+            if text.upper().startswith(title_path[0].upper()) and [text, url] not in series:
+                series.append([text, url])
+                # print(text, url)
     if len(series) < 1:
-        print('No new Releases.')
+        print('\tNo new Releases.')
+    return True
 
 
 def get_urls():
@@ -107,20 +109,63 @@ def get_urls():
     Get the URLs for not downloaded episodes.
     """
     for serie in series:
-        title = serie[1]
-        number = title.strip()[title.find('Season'):]
-        for episode in downloaded_list:
-            if episode[0].upper() in title.upper():
-                ep_downloaded = int(''.join(re.findall(r'\d+', episode[1])))
-                ep_available = int(''.join(re.findall(r'\d+', number)))
-                if ep_downloaded < ep_available:
-                    if input('\t\t' + serie[0] + ' ' + serie[1] + ' Download ? y/n ') == 'y':
-                        urls.append(serie[2])
+        req = requests.get(serie[1])
+        soup = BeautifulSoup(req.text, 'html.parser')
+        _as = soup.find_all('a')
+
+        for _a in _as:
+            text = _a.find_all(text=True)
+            text = ' '.join(text)
+            url = _a.get('href')
+
+            if serie[0] in text:
+                number = text.strip()[text.find('Season'):]
+                if len(number) > 1:
+                    for episode in downloaded_list:
+                        if episode[0] in text:
+                            d = re.findall(r'\d+', episode[1])
+                            a = re.findall(r'\d+', number)
+
+                            if len(a) < 2:
+                                a = (a[0], 0)
+
+                            if len(d) < 2:
+                                d = (d[0], 0)
+
+                            se_downloaded = int(d[0])
+                            ep_downloaded = int(d[1])
+                            se_available = int(a[0])
+                            ep_available = int(a[1])
+
+                            if se_downloaded <= se_available and ep_downloaded < ep_available:
+                                # if input('\t\t' + text + ' Download ? y/n ') == 'y':
+                                urls.append((text, url))
 
     if len(urls) < 1:
         print('\tNothing to download.')
     else:
         print('\tOpen each episode page to manually start download ...')
+
+
+def launch_browser():
+    """
+    Launch browser for each episode.
+    """
+    for data in urls:
+        text, url = data
+        if input('\t\t' + text + ' Download ? y/n ') == 'y':
+            req = requests.get(url)
+            soup = BeautifulSoup(req.text, 'html.parser')
+            _as = soup.find_all('a')
+
+            for a in _as:
+                link_text = a.find_all(text=True)
+
+                if len(link_text) > 0:
+                    if text in link_text[0]:
+                        link = a.get('href')
+                        link = get_video_url(link)
+                        webbrowser.open(link, new=2)
 
 
 def get_video_url(page_url):
@@ -129,24 +174,16 @@ def get_video_url(page_url):
     :param page_url: Video web page.
     :return video_url: Video file URL.
     """
-    r = requests.get(page_url)
-    soup = BeautifulSoup(r.text, 'html.parser')
-    div = soup.find('div', attrs={'class': 'postTabs_divs postTabs_curr_div'})
-    iframe = div.find('iframe')
-    video_url = iframe.get('src')
-    return video_url
+    req = requests.get(page_url)
+    soup = BeautifulSoup(req.text, 'html.parser')
+    iframes = soup.find_all('iframe')
 
+    for iframe in iframes:
+        video_url = iframe.get('src')
+        if 'openload' in video_url:
+            return video_url
 
-def launch_browser():
-    """
-    Launch browser for each episode.
-    """
-    for url in urls:
-        r = requests.get(url)
-        soup = BeautifulSoup(r.text, 'html.parser')
-        link = soup.find('div', attrs={'class': 'postSDiv'}).a.get('href')
-        link = get_video_url(link)
-        webbrowser.open(link, new=2)
+    return page_url
 
 
 def main():
@@ -154,10 +191,11 @@ def main():
     get_paths()
     get_downloaded_list()
     print('\tGet new releases list from website ...')
-    get_series_list()
-    print('\tCheck if there is new episodes to download ...')
-    get_urls()
-    launch_browser()
+    if get_series_list():
+        # get_episodes_list()
+        print('\tCheck if there is new episodes to download ...')
+        get_urls()
+        launch_browser()
     input('\tPress Enter to exit.')
 
 
