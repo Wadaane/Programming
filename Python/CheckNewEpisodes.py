@@ -98,7 +98,6 @@ def get_series_list():
         for title_path in titles_paths:
             if text.upper().startswith(title_path[0].upper()) and [text, url] not in series:
                 series.append([text, url])
-                # print(text, url)
     if len(series) < 1:
         print('\tNo new Releases.')
     return True
@@ -108,10 +107,13 @@ def get_urls():
     """
     Get the URLs for not downloaded episodes.
     """
+    length = 0
     for serie in series:
         req = requests.get(serie[1])
         soup = BeautifulSoup(req.text, 'html.parser')
         _as = soup.find_all('a')
+        print('\r\t' + serie[0] + ' ' * length, sep=' ', end='', flush=True)
+        length = len(serie[0])
 
         for _a in _as:
             text = _a.find_all(text=True)
@@ -142,8 +144,14 @@ def get_urls():
                                 urls.append((text, url))
 
     if len(urls) < 1:
+        print('\r', end='', flush=True)
         print('\tNothing to download.')
     else:
+        print('\r', end='', flush=True)
+        print('\tThere {2} {0} new episode{1}.'.format(
+            len(urls),
+            's' if len(urls) > 1 else '',
+            'are' if len(urls) > 1 else 'is'))
         print('\tOpen each episode page to manually start download ...')
 
 
