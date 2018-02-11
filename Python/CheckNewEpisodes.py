@@ -9,11 +9,12 @@ paths = [
     'E:\Series\Comedie',
     'E:\Series\Autre'
 ]
-# web_url = 'https://www.couchtuner.onl/new-releases-2'
-web_url = 'http://www.couch-tuner.la/tv-lists/'
+web_url = 'https://www.couchtuner.rocks/tv-shows/'
+web_url2 = 'http://www.couch-tuner.la/tv-lists/'
 downloaded_list = []
 series = []
 urls = []
+links = []
 titles_paths = []
 print('\t\tCheck For New Episodes')
 
@@ -85,8 +86,11 @@ def get_series_list():
     try:
         r = requests.get(web_url)
     except:
-        print('\tConnexion error')
-        return False
+        try:
+            r = requests.get(web_url2)
+        except:
+            print('\tConnexion error')
+            return False
 
     soup = BeautifulSoup(r.text, 'html.parser')
     _as = soup.find_all('a')
@@ -162,18 +166,25 @@ def launch_browser():
     for data in urls:
         text, url = data
         if input('\t\t' + text + ' Download ? y/n ') == 'y':
+            # print(text, url)
             req = requests.get(url)
             soup = BeautifulSoup(req.text, 'html.parser')
             _as = soup.find_all('a')
 
             for a in _as:
                 link_text = a.find_all(text=True)
+                link_text = ' '.join(link_text).strip()
 
                 if len(link_text) > 0:
-                    if text in link_text[0]:
+                    if link_text.strip().startswith(text.strip()):
                         link = a.get('href')
+                        # print(link)
                         link = get_video_url(link)
-                        webbrowser.open(link, new=2)
+                        links.append(link)
+
+    if len(links) > 0:
+        for link in links:
+            webbrowser.open(link, new=2)
 
 
 def get_video_url(page_url):
