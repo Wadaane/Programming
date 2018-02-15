@@ -100,7 +100,7 @@ def get_series_list():
         url = _a.get('href')
 
         for title_path in titles_paths:
-            if text.upper().startswith(title_path[0].upper()) and [text, url] not in series:
+            if text.upper().strip() == title_path[0].upper().strip() and [text, url] not in series:
                 series.append([text, url])
     if len(series) < 1:
         print('\tNo new Releases.')
