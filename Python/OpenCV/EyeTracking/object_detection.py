@@ -3,9 +3,10 @@ from threading import Thread
 
 import cv2
 import numpy as np
-# import win32com.client as wincl
-# import profile
 import pyttsx3
+
+
+# import profile
 
 
 class ObjectDetection:
@@ -22,10 +23,15 @@ class ObjectDetection:
         self.set_center = False
         self.eye_imgs = {'left': [], 'right': []}
         self.eyes = None
+        self.open_left = False
+        self.open_right = False
         self.video_capture = cv2.VideoCapture(0)
         self.frame_width = int(self.video_capture.get(3))
         self.frame_height = int(self.video_capture.get(4))
-        self.fps = 10
+        self.face_dim = (0, 0)
+        self.fps = 20
+        self.divs = (24, 3)
+        self.fixed_eye = True
         self.center_face = []
         self.center_eye = []
         self.center_retina = []
@@ -38,11 +44,16 @@ class ObjectDetection:
             self.detect_faces_eyes(frame)
             self.detect_eye_move(frame)
 
+            if len(self.center_face) > 0 and len(self.center_eye) > 0:
+                self.face_dim = self.center_face[0][1], self.center_face[0][2]
+
             if self.draw_frame:
                 self.draw(frame)
 
             d = {
-                'Direction': self.direction
+                'Direction': self.direction,
+                'Left': self.open_left,
+                'Right': self.open_right
             }
 
             self.q.put(d)
@@ -79,18 +90,18 @@ class ObjectDetection:
         cv2.imshow('Eyes', self.eyes)
 
     def control_input(self):
-        detected = False
+        if not self.fixed_eye:
+            detected = False
 
-        for center_retina in self.center_retina:
-            for center in self.center_eye:
-                if center[0][0] - center[1] // 2 < center_retina[0] < center[0][0] + center[1] // 2 and \
-                        center[0][1] - center[2] // 2 < center_retina[1] < center[0][1] + center[2] // 2:
-                    detected = True
+            for center_retina in self.center_retina:
+                for center in self.center_eye:
+                    detected |= center[0][0] - center[1] // 2 < center_retina[0] < center[0][0] + center[1] // 2 and \
+                                center[0][1] - center[2] // 2 < center_retina[1] < center[0][1] + center[2] // 2
 
-        if not detected:
-            self.direction = 0
+            if not detected:
+                self.direction = 0
 
-        key = cv2.waitKey(int(1000 / self.fps))
+        key = cv2.waitKey(1000 // self.fps)
 
         if key in [ord('c'), 32] or self.direction == 0:
             self.scan()
@@ -116,28 +127,42 @@ class ObjectDetection:
             gray,
             scaleFactor=1.1,
             minNeighbors=5,
-            minSize=(30, 30)
+            minSize=(int(self.face_dim[0] * 0.8), int(self.face_dim[1] * 0.8)),
+            maxSize=(int(self.face_dim[0] * 1.2), int(self.face_dim[1] * 1.2))
         )
 
         for (x, y, w, h) in faces:
-            center_eye = (x + w // 2, y + h // 2)
+            center_face = (x + w // 2, y + h // 2)
             roi_color = image[y:y + h, x:x + w]
-            self.center_face.append((center_eye, w, h))
+            self.center_face.append((center_face, w, h))
             self.detect_eyes(roi_color, x, y, w, h)
 
     def detect_eyes(self, roi_color, x, y, w, h):
+        left_open = False
+        right_open = False
         roi_gray = cv2.cvtColor(roi_color, cv2.COLOR_BGR2GRAY)
         eyes = self.eyeCascade.detectMultiScale(roi_gray,
                                                 scaleFactor=1.1,
                                                 minNeighbors=5,
-                                                maxSize=(h // 4, h // 4),
-                                                minSize=(h // 8, h // 8))
+                                                maxSize=(w // 2, h // 4),
+                                                minSize=(w // 8, h // 8))
         for (ex, ey, ew, eh) in eyes:
             center_retina = (x + ex + ew // 2, y + ey + eh // 2)
+
             if y < center_retina[1] < y + h // 2:
                 if self.set_center and len(self.center_eye) <= 2:
                     self.center_eye.append((center_retina, ew, eh))
+
                 self.center_retina.append(center_retina)
+                left_eye = center_retina[0] < x + w // 2
+
+                if left_eye:
+                    left_open = True
+                else:
+                    right_open = True
+
+        self.open_left = left_open
+        self.open_right = right_open
 
     def detect_eye_move(self, src):
         img = np.zeros([128, 256])
@@ -153,8 +178,8 @@ class ObjectDetection:
                 for face in self.center_face:
                     if face[0][0] - face[1] < center[0][0] < face[0][0] + face[1]:
                         middle = face[0][0]
-
-                self.map_image(img, center[0][0] < middle, divs=(24, 3))
+                left_eye = center[0][0] < middle
+                self.map_image(img, left_eye, divs=self.divs)
 
             img = self.cat_images([self.eye_imgs['left'], self.eye_imgs['right']])
             self.eye_imgs['left'].clear()
@@ -273,7 +298,7 @@ class ObjectDetection:
 
 def main():
     directions = ['Scanning ...', 'up', 0, 'left', 'center', 'right', 0, 'down', 0]
-    max_samples = 3
+    max_samples = 9
     n_samples = 0
     samples = [0] * 9
     result = 0
@@ -284,12 +309,6 @@ def main():
     t.start()
 
     engine = pyttsx3.init()
-    engine.setProperty('voice',
-                       "HKEY_LOCAL_MACHINE\SOFTWARE\Microsoft\Speech\Voices\Tokens\TTS_MS_EN-US_ZIRA_11.0")  # changes the voice
-
-    # speak = wincl.Dispatch("SAPI.SpVoice")
-    # speak.Volume = 100
-    # speak.Rate = 6
 
     while True:
         data = q1.get()
@@ -305,19 +324,19 @@ def main():
             n_samples = 0
             direction = samples.index(max(samples))
             samples = [0] * 9
-            print('\r' + 'Direction: ' + str(directions[direction]), end='')
+            print('\rDirection: ' + str(directions[direction]), end='')
+            # print('\nLeft Eye Opened: ' + str(data['Left']) +
+            #       ' Right Eye Opened: ' + str(data['Right']), end='')
             if result != direction:
                 result = direction
                 if result != 4:
                     engine.say(str(directions[direction]))
                     engine.runAndWait()
-                    engine.stop()
-                # speak.Speak(str(directions[direction]))
 
     q1.join()
     t.join()
 
 
 if __name__ == '__main__':
-    # profile.run('main()', sort=-1)
+    # profile.run('main()', sort=2)
     main()
