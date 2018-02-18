@@ -11,7 +11,12 @@ import pyttsx3
 
 class ObjectDetection:
     def __init__(self, q, draw_frame=True):
-        self.direction = 0
+        self.ver_strings = ['Center', 'Top', 'Bottom']
+        self.hor_strings = ['Center', 'Left', 'Right']
+        self.directions = ['Center', 'left', 'right', 'Bottom', 'Top', 'Press Space']
+        self.direction = [0] * 10
+        self.hor_directions = [0] * 3
+        self.ver_directions = [0] * 3
         self.eyeCascade = cv2.CascadeClassifier("..\models\haarcascade_eye.xml")
         self.faceCascade = cv2.CascadeClassifier("..\models\haarcascade_frontalface_default.xml")
 
@@ -31,10 +36,17 @@ class ObjectDetection:
         self.face_dim = (0, 0)
         self.fps = 20
         self.divs = (24, 3)
+        self.centered_img = []
         self.fixed_eye = True
         self.center_face = []
         self.center_eye = []
         self.center_retina = []
+        self.calibrate = False
+        self.calibration_step = -1
+        self.iris = [[]] * 5
+        self.calibrated_center = [(0, 0)] * 5
+        self.calibration_finished = False
+        self.center_iris = []
 
     def main(self):
         while True:
@@ -43,6 +55,7 @@ class ObjectDetection:
 
             self.detect_faces_eyes(frame)
             self.detect_eye_move(frame)
+            self.detect_eye_move2()
 
             if len(self.center_face) > 0 and len(self.center_eye) > 0:
                 self.face_dim = self.center_face[0][1], self.center_face[0][2]
@@ -51,10 +64,20 @@ class ObjectDetection:
                 self.draw(frame)
 
             d = {
-                'Direction': self.direction,
+                'Direction': self.direction.index(max(self.direction)),
                 'Left': self.open_left,
-                'Right': self.open_right
+                'Right': self.open_right,
+                'Horizontal': self.hor_directions.index(max(self.hor_directions)),
+                'Vertical': self.ver_directions.index(max(self.ver_directions)),
+                'Calibration_finished': self.calibration_finished
             }
+
+            self.direction.clear()
+            self.direction = [0] * 10
+            self.hor_directions.clear()
+            self.hor_directions = [0] * 3
+            self.ver_directions.clear()
+            self.ver_directions = [0] * 3
 
             self.q.put(d)
             stop = not self.control_input()
@@ -88,6 +111,9 @@ class ObjectDetection:
         cv2.namedWindow("Eyes", cv2.WINDOW_AUTOSIZE)
         cv2.resizeWindow('Eyes', self.eyes.shape[1], self.eyes.shape[0])
         cv2.imshow('Eyes', self.eyes)
+        if self.centered_img is not None and len(self.centered_img) > 0:
+            cv2.imshow('Eyes1', self.cat_images([self.centered_img]))
+            self.centered_img.clear()
 
     def control_input(self):
         if not self.fixed_eye:
@@ -99,12 +125,24 @@ class ObjectDetection:
                                 center[0][1] - center[2] // 2 < center_retina[1] < center[0][1] + center[2] // 2
 
             if not detected:
-                self.direction = 0
+                self.direction[9] = -1
 
         key = cv2.waitKey(1000 // self.fps)
 
-        if key in [ord('c'), 32] or self.direction == 0:
-            self.scan()
+        if key in [ord('c'), 32] or self.direction[9] == -1:
+            # self.scan()
+            if self.calibrate:
+                self.calibration_step += 1
+                if self.calibration_step >= len(self.calibrated_center):
+                    self.calibration_step = -1
+                    self.calibrate = False
+                    self.calibration_finished = True
+            elif self.calibration_step == -1:
+                self.scan()
+                self.calibrate = True
+                self.calibration_finished = False
+            print("Calibration:", self.directions[self.calibration_step])
+
             return True
 
         elif key in [ord('q'), ord('\x1b')] or (self.draw_frame and cv2.getWindowProperty('Video', 0) < 0):
@@ -112,6 +150,13 @@ class ObjectDetection:
         else:
             self.set_center = False
             return True
+
+    def calibration(self):
+        center_x = np.array(self.iris[self.calibration_step])
+        center_y = np.array(self.iris[self.calibration_step])
+        x = int(center_x.mean())
+        y = int(center_y.mean())
+        self.calibrated_center[self.calibration_step] = x, y
 
     def scan(self):
         self.set_center = True
@@ -179,7 +224,7 @@ class ObjectDetection:
                     if face[0][0] - face[1] < center[0][0] < face[0][0] + face[1]:
                         middle = face[0][0]
                 left_eye = center[0][0] < middle
-                self.map_image(img, left_eye, divs=self.divs)
+                self.map_image(img, left_eye)
 
             img = self.cat_images([self.eye_imgs['left'], self.eye_imgs['right']])
             self.eye_imgs['left'].clear()
@@ -187,25 +232,73 @@ class ObjectDetection:
 
         self.eyes = img
 
-    def map_image(self, src, left, divs=(12, 3)):
+    def detect_eye_move2(self):
+        if self.calibration_finished:
+            c_center = self.calibrated_center[0]
+            c_left = self.calibrated_center[1]
+            c_right = self.calibrated_center[2]
+            c_bottom = self.calibrated_center[3]
+            c_top = self.calibrated_center[4]
+
+            b_left = c_left[0]  # + (c_center[0] - c_left[0])//2
+            b_right = c_right[0]  # c_center[0] + (c_right[0] - c_center[0])//2
+
+            b_bottom = c_bottom[1]  # c_center[1] + (c_bottom[1] - c_center[1]) // 2
+            b_top = c_top[1]  # + (c_center[1] - c_top[1]) // 2
+
+            for center in self.center_iris:
+                hor = 0
+                if center[0] < b_left:
+                    self.hor_directions[1] += 1
+                    hor = 1
+                    # print(self.directions[1], end=': ')
+                elif center[0] > b_right:
+                    self.hor_directions[2] += 1
+                    hor = 2
+                    # print(self.directions[2], end=': ')
+                else:
+                    self.hor_directions[0] += 1
+                    # print(self.directions[0], end=': ')
+                print(str(b_left) + ' ' + str(center[0]) + ' ' + str(b_right), self.hor_strings[hor])
+
+                ver = 0
+                if center[1] < b_top:
+                    self.ver_directions[1] += 1
+                    ver = 1
+                    # print(self.directions[4])
+                elif center[1] > b_bottom:
+                    self.ver_directions[2] += 1
+                    ver = 2
+                    # print(self.directions[3])
+                else:
+                    self.ver_directions[0] += 1
+                    # print(self.directions[0])
+
+                print(str(b_top) + ' ' + str(center[1]) + ' ' + str(b_bottom), self.ver_strings[ver] + '\n', )
+                # print(self.hor_strings[self.hor_directions.index(max(self.hor_directions))],
+                #       self.ver_strings[self.ver_directions.index(max(self.ver_directions))])
+
+            self.center_iris.clear()
+
+    def map_image(self, src, left):
+        divs = self.divs
         img_gray = cv2.cvtColor(src.copy(), cv2.COLOR_RGB2GRAY)
         img_mapped_black = img_gray.copy()
         side = 'left' if left else 'right'
 
         if len(self.eye_imgs[side]) == 0:
-            for n in divs:
-                img_mapped_gray = self.divide_image(img_mapped_black.copy(), div=n)
-                img_mapped_black = cv2.threshold(img_mapped_gray.copy(), self.thresh, 255, cv2.THRESH_BINARY)[1]
+            self.divide_image(img_mapped_black, div=divs[0])
+            img_mapped_black = cv2.threshold(img_mapped_black.copy(), self.thresh * 1.2, 255, cv2.THRESH_BINARY)[1]
+            image_direction = self.divide_image(img_mapped_black.copy(), div=divs[1], return_image=True)
 
-                if n == divs[0]:
-                    self.eye_imgs[side].append(img_gray)
-                self.eye_imgs[side].append(img_mapped_gray)
-                self.eye_imgs[side].append(img_mapped_black)
+            self.get_draw_center(img_gray, img_mapped_black.copy())
+            self.eye_imgs[side].append(img_gray)
+            self.eye_imgs[side].append(img_mapped_black.copy())
+            self.eye_imgs[side].append(image_direction)
 
-    def divide_image(self, img, div):
+    def divide_image(self, img, div, return_image=False):
         h = img.shape[0]
         w = img.shape[1]
-        f_image = np.zeros([h, w])
         index = 0
         d = 0
         br_max = 255
@@ -215,28 +308,34 @@ class ObjectDetection:
                 i = img[n * h // div:(n + 1) * h // div,
                     r * w // div: (r + 1) * w // div]
                 br = cv2.mean(i)
-                i.fill(br[0])
+                if not return_image and (r in [0, 1, div - 2, div - 1] or
+                                         n in [0, 1, div - 2, div - 1]):
+                    i.fill(255)
 
-                if div <= 3:
-                    if index in [0, 2, 6, 8]:
-                        i.fill(255)
-                    elif br[0] < br_max:
-                        br_max = br[0]
+                if br[0] < br_max:
+                    br_max = br[0]
+                    self.thresh = br_max
+
+        if return_image:
+            f_image = np.zeros([h, w])
+            for n in range(div):
+                for r in range(div):
+                    i = img[n * h // div:(n + 1) * h // div,
+                        r * w // div: (r + 1) * w // div]
+                    br = cv2.mean(i)
+                    i.fill(br[0])
+
+                    if br[0] <= br_max:
                         i.fill(0)
-                        self.thresh = br_max * 0.8
                         d = index
-                else:
-                    if r in [0, div - 1] or n in [0, div - 1]:
+                    else:
                         i.fill(255)
-                    elif br[0] < br_max:
-                        br_max = br[0]
-                        self.thresh = br_max * 1.2
 
-                index += 1
-                f_image[n * h // div:(n + 1) * h // div, r * w // div: (r + 1) * w // div] = i
-        self.direction = d
+                    index += 1
+                    f_image[n * h // div:(n + 1) * h // div, r * w // div: (r + 1) * w // div] = i
 
-        return f_image
+            self.direction[d] += 1
+            return f_image
 
     @staticmethod
     def cat_images(img_list1, padding=10, scale=2):
@@ -268,14 +367,11 @@ class ObjectDetection:
         for img_list in img_list1:
             for image in img_list:
                 index += 1
-                final_image[current_y:current_y + image.shape[1],
-                current_x:image.shape[0] + current_x, 0] = image
+                final_image[current_y:current_y + image.shape[1], current_x:image.shape[0] + current_x, 0] = image
 
-                final_image[current_y:current_y + image.shape[1],
-                current_x:image.shape[0] + current_x, 1] = image
+                final_image[current_y:current_y + image.shape[1], current_x:image.shape[0] + current_x, 1] = image
 
-                final_image[current_y:current_y + image.shape[1],
-                current_x:image.shape[0] + current_x, 2] = image
+                final_image[current_y:current_y + image.shape[1], current_x:image.shape[0] + current_x, 2] = image
 
                 current_x += image.shape[0] + padding
 
@@ -289,6 +385,30 @@ class ObjectDetection:
 
         return final_image
 
+    def get_draw_center(self, src, img, radius=7):
+        x_list = []
+        y_list = []
+
+        for y in range(img.shape[0]):
+            for x in range(img.shape[1]):
+                if img[y, x] == 0:
+                    x_list.append(x)
+                    y_list.append(y)
+
+        if len(x_list) > 0:
+            center = (min(x_list) + (max(x_list) - min(x_list)) // 2,
+                      min(y_list) + (max(y_list) - min(y_list)) // 2)
+
+            if self.calibrate:
+                self.iris[self.calibration_step].append(center)
+                if len(self.iris[self.calibration_step]) > 50:
+                    self.calibration()
+                    self.iris[self.calibration_step].clear()
+                cv2.circle(src, self.calibrated_center[self.calibration_step], radius, 255, thickness=-1)
+            else:
+                cv2.circle(src, center, radius, 255, thickness=-1)
+                self.center_iris.append(center)
+
     def __del__(self):
         # When everything is done, release the capture
         self.video_capture.release()
@@ -297,10 +417,16 @@ class ObjectDetection:
 
 
 def main():
-    directions = ['Scanning ...', 'up', 0, 'left', 'center', 'right', 0, 'down', 0]
-    max_samples = 9
+    # directions = ['Top Left', 'Top', 'Top Right',
+    #               'left', 'center', 'right',
+    #               'Bottom Left', 'Bottom', 'Bottom Right',
+    #               'Scanning ...']
+    bi_directions = [['Center', 'Left', 'Right'], ['Center', 'Top', 'Bottom']]
+    max_samples = 1
     n_samples = 0
     samples = [0] * 9
+    hor_samples = [0] * 3
+    ver_samples = [0] * 3
     result = 0
 
     q1 = Queue()
@@ -317,21 +443,35 @@ def main():
         if data is False:
             break
 
-        if n_samples < max_samples:
-            n_samples += 1
-            samples[data['Direction']] += 1
-        else:
-            n_samples = 0
-            direction = samples.index(max(samples))
-            samples = [0] * 9
-            print('\rDirection: ' + str(directions[direction]), end='')
-            # print('\nLeft Eye Opened: ' + str(data['Left']) +
-            #       ' Right Eye Opened: ' + str(data['Right']), end='')
-            if result != direction:
-                result = direction
-                if result != 4:
-                    engine.say(str(directions[direction]))
-                    engine.runAndWait()
+        # print(data)
+
+        calibration_finished = data['Calibration_finished']
+
+        if calibration_finished:
+            if n_samples < max_samples:
+                n_samples += 1
+                samples[data['Direction']] += 1
+                hor_samples[data['Horizontal']] += 1
+                ver_samples[data['Vertical']] += 1
+            else:
+                n_samples = 0
+                direction = samples.index(max(samples))
+                hor = hor_samples.index(max(hor_samples))
+                ver = ver_samples.index(max(ver_samples))
+                samples = [0] * 9
+                # print('\rDirection: ' + str(directions[direction]), end='')
+                # print('Hor: ' + str(bi_directions[0][hor]), end=' ')
+                # print('Ver: ' + str(bi_directions[1][ver]), end='\n\n')
+                # print('\nLeft Eye Opened: ' + str(data['Left']) +
+                #       ' Right Eye Opened: ' + str(data['Right']), end='')
+                if result != direction:
+                    result = direction
+                    if result != 4:
+                        pass
+                        # engine.say(str(directions[direction]))
+                        # engine.say(str(bi_directions[0][hor]))
+                        # engine.say(str(bi_directions[1][ver]))
+                        # engine.runAndWait()
 
     q1.join()
     t.join()
