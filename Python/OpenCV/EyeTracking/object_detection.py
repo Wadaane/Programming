@@ -1,15 +1,26 @@
+import os
 from queue import Queue
 from threading import Thread
 
 import cv2
 import numpy as np
 import pyautogui
-import pyttsx3
+# import pyttsx3
+import win32com.client as wincl
+
+
+def resource_path(relative_path):
+    """ Get absolute path to resource, works for dev and for PyInstaller """
+    try:
+        # PyInstaller creates a temp folder and stores path in _MEIPASS
+        base_path = sys._MEIPASS
+    except Exception:
+        base_path = os.path.abspath(".")
+
+    return os.path.join(base_path, relative_path)
 
 
 # import profile
-
-
 class ObjectDetection:
     def __init__(self, q, draw_frame=True):
         self.directions = [0, 'Top', 0,
@@ -17,8 +28,8 @@ class ObjectDetection:
                            0, 'Bottom', 0,
                            'Press Space']
         self.direction = [0] * 10
-        self.eyeCascade = cv2.CascadeClassifier("..\models\haarcascade_eye.xml")
-        self.faceCascade = cv2.CascadeClassifier("..\models\haarcascade_frontalface_default.xml")
+        self.eyeCascade = cv2.CascadeClassifier(resource_path("haarcascade_eye.xml"))
+        self.faceCascade = cv2.CascadeClassifier(resource_path("haarcascade_frontalface_default.xml"))
 
         self.q = q
         self.max_width = 0
@@ -29,11 +40,13 @@ class ObjectDetection:
         self.eye_imgs = {'left': [], 'right': []}
         self.eyes_frame = None
         self.clicks = 0
-        self.video_capture = cv2.VideoCapture(0)
+        self.video_capture = cv2.VideoCapture(1)
         self.frame_width = int(self.video_capture.get(3))
         self.frame_height = int(self.video_capture.get(4))
         self.face_dim = (0, 0)
         self.fps = 15
+        self.offset_left = 5
+        self.offset_right = 10
         self.divs = (24, 3)
         self.centered_img = []
         self.fixed_eye = False
@@ -45,6 +58,7 @@ class ObjectDetection:
         while True:
             ret, frame = self.video_capture.read()
             frame = cv2.flip(frame, 1)
+            # cv2.imshow('Video', frame)
 
             gray = self.detect_faces_eyes(frame)
 
@@ -138,7 +152,7 @@ class ObjectDetection:
 
         faces = self.faceCascade.detectMultiScale(
             image,
-            scaleFactor=1.1,
+            scaleFactor=1.5,
             minNeighbors=5,
             minSize=(int(self.face_dim[0] * 0.8), int(self.face_dim[1] * 0.8)),
             maxSize=(int(self.face_dim[0] * 1.2), int(self.face_dim[1] * 1.2))
@@ -160,10 +174,10 @@ class ObjectDetection:
             cv2.equalizeHist(roi_gray, roi_gray)
 
         eyes = self.eyeCascade.detectMultiScale(roi_gray,
-                                                scaleFactor=1.1,
+                                                scaleFactor=1.5,
                                                 minNeighbors=5,
                                                 maxSize=(w // 2, h // 4),
-                                                minSize=(w // 8, h // 8))
+                                                minSize=(w // 4, h // 4))
         for (ex, ey, ew, eh) in eyes:
             center_retina = (x + ex + ew // 2, y + ey + eh // 2)
 
@@ -205,26 +219,62 @@ class ObjectDetection:
         self.eyes_frame = img
 
     def map_image(self, src, left):
+        if self.set_center:
+            self.offset_right = 0
+            self.offset_left = 0
+
         divs = self.divs
-        img_gray = src.copy()
+        img_gray_enhanced = src.copy()
+        h = img_gray_enhanced.shape[0]
+        w = img_gray_enhanced.shape[1]
 
-        br_level = int(cv2.mean(img_gray)[0])
+        offset = self.offset_left if left else self.offset_right
+
+        if offset > 0:
+            img_gray_enhanced[:, :w - offset] = img_gray_enhanced[:, offset:]
+            img_gray_enhanced[:, w - offset:] = 255
+        else:
+            img_gray_enhanced[:, -offset:] = img_gray_enhanced[:, : w + offset]
+            img_gray_enhanced[:, 0: -offset] = 255
+
+        br_level = int(cv2.mean(img_gray_enhanced)[0])
         if br_level < 128:
-            cv2.equalizeHist(img_gray, img_gray)
+            cv2.equalizeHist(img_gray_enhanced, img_gray_enhanced)
 
-        img_mapped_black = img_gray.copy()
         side = 'left' if left else 'right'
 
         if len(self.eye_imgs[side]) == 0:
-            self.divide_image(img_mapped_black, div=divs[0])
-            img_mapped_black = cv2.threshold(img_mapped_black, self.thresh * 1, 255, cv2.THRESH_BINARY)[1]
-            image_direction = self.divide_image(img_mapped_black, div=divs[1], return_image=True)
+            img_mapped_black = cv2.resize(img_gray_enhanced, (divs[0], divs[0]), interpolation=cv2.INTER_AREA)
+            self.limit_bounds(img_mapped_black, h, w)
+            thresh = np.min(img_mapped_black)
+            img_mapped_black = cv2.threshold(img_mapped_black, thresh, 255, cv2.THRESH_BINARY)[1]
+            self.get_draw_center(img_mapped_black, img_mapped_black, radius=3)
 
-            self.get_draw_center(img_gray, img_mapped_black, radius=5, color=255)
-            self.eye_imgs[side].append(img_gray)
-            self.get_draw_center(img_mapped_black, img_mapped_black)
+            img_mapped_direction = cv2.resize(img_mapped_black, (divs[1], divs[1]), interpolation=cv2.INTER_AREA)
+            thresh = np.min(img_mapped_direction)
+            img_mapped_direction = cv2.threshold(img_mapped_direction, thresh, 255, cv2.THRESH_BINARY)[1]
+
+            d = img_mapped_direction.argmin()
+            if d != 0:
+                if len(self.center_retina) == 0:
+                    self.direction[7] += 1
+                else:
+                    self.direction[d] += 1
+
+            img_mapped_black = cv2.resize(img_mapped_black, (h, w), interpolation=cv2.INTER_AREA)
+            img_mapped_direction = cv2.resize(img_mapped_direction, (h, w), interpolation=cv2.INTER_AREA)
+            # image_direction = self.divide_image(img_mapped_black, div=divs[1], return_image=True)
+            center = self.get_draw_center(img_mapped_black, img_gray_enhanced, color=255)
+            self.eye_imgs[side].append(img_gray_enhanced)
             self.eye_imgs[side].append(img_mapped_black)
-            self.eye_imgs[side].append(image_direction)
+            self.eye_imgs[side].append(img_mapped_direction)
+
+            if self.set_center:
+                offset = center[0] - w // 2
+                if left:
+                    self.offset_left = offset
+                else:
+                    self.offset_right = offset
 
     def divide_image(self, img, div, return_image=False):
         h = img.shape[0]
@@ -233,14 +283,13 @@ class ObjectDetection:
         d = 0
         br_max = 255
 
-        for n in range(div):
-            for r in range(div):
-                i = img[n * h // div:(n + 1) * h // div,
-                    r * w // div: (r + 1) * w // div]
+        for y in range(div):
+            for x in range(div):
+                i = img[y * h // div:(y + 1) * h // div,
+                    x * w // div: (x + 1) * w // div]
                 i = i.copy()
                 br = cv2.mean(i)
-                if not return_image and (r in [0, 1, div - 2, div - 1] or
-                                         n in [0, 1, div - 2, div - 1]):
+                if not return_image:
                     i.fill(255)
 
                 if br[0] < br_max:
@@ -249,13 +298,16 @@ class ObjectDetection:
 
         if return_image:
             f_image = np.zeros([h, w])
-            for n in range(div):
-                for r in range(div):
-                    i = img[n * h // div:(n + 1) * h // div,
-                        r * w // div: (r + 1) * w // div]
+            for y in range(div):
+                for x in range(div):
+                    i = img[y * h // div:(y + 1) * h // div,
+                        x * w // div: (x + 1) * w // div]
                     i = i.copy()
                     br = cv2.mean(i)
-                    i.fill(br[0])
+                    if h * 0.3 < y < h * 0.7 or w * 0.3 < x < w * 0.7:
+                        i.fill(br[0])
+                    else:
+                        i.fill(255)
 
                     if br[0] <= br_max and index in [1, 3, 4, 5, 7]:
                         i.fill(0)
@@ -264,7 +316,7 @@ class ObjectDetection:
                         i.fill(255)
 
                     index += 1
-                    f_image[n * h // div:(n + 1) * h // div, r * w // div: (r + 1) * w // div] = i.copy()
+                    f_image[y * h // div:(y + 1) * h // div, x * w // div: (x + 1) * w // div] = i.copy()
 
             if d != 0:
                 if len(self.center_retina) == 0:
@@ -316,8 +368,7 @@ class ObjectDetection:
 
         img_list1.clear()
 
-        dim = (int(scale * final_image.shape[1]), int(scale * final_image.shape[0]))
-        final_image = cv2.resize(final_image, dim, interpolation=cv2.INTER_AREA)
+        final_image = cv2.resize(final_image, (0, 0), fx=scale, fy=scale, interpolation=cv2.INTER_AREA)
 
         return final_image
 
@@ -326,9 +377,10 @@ class ObjectDetection:
         x_list = []
         y_list = []
 
-        for y in range(dst.shape[0]):
-            for x in range(dst.shape[1]):
-                if dst[y, x] == 0:
+        for y in range(src.shape[0]):
+            for x in range(src.shape[1]):
+                if src[y, x] == 0:  # and (src.shape[0]*0.3 < y < src.shape[0]*0.7 or
+                    # src.shape[1]*0.3 < x < src.shape[1]*0.7):
                     x_list.append(x)
                     y_list.append(y)
 
@@ -336,7 +388,15 @@ class ObjectDetection:
             center = (min(x_list) + (max(x_list) - min(x_list)) // 2,
                       min(y_list) + (max(y_list) - min(y_list)) // 2)
 
-            cv2.circle(src, center, radius, color, thickness=-1)
+            cv2.circle(dst, center, radius, color, thickness=-1)
+            return center
+
+    @staticmethod
+    def limit_bounds(img_mapped_black, h, w):
+        img_mapped_black[:int(h * 0.1), :] = 255
+        img_mapped_black[int(h * 0.9):, :] = 255
+        img_mapped_black[:, :int(w * 0.1)] = 255
+        img_mapped_black[:, int(w * 0.9):] = 255
 
     def __del__(self):
         self.video_capture.release()
@@ -348,7 +408,8 @@ class MouseAndSpeech:
         self.talk = talk
         self.move = move
         self.m_pyautogui = m_pyautogui
-        self.engine = engine
+        # self.engine = engine
+        self.speak = engine
         self.max_samples = 5
         self.n_samples = 0
 
@@ -396,10 +457,10 @@ class MouseAndSpeech:
 
             self.reset()
 
-            if self.talk:
-                self.engine.runAndWait()
-            else:
-                self.engine.stop()
+            # if self.talk:
+            #     self.engine.runAndWait()
+            # else:
+            #     self.engine.stop()
 
     def handle_click(self, click):
         if self.result_click == 4 and click == 2 or self.result_click == 2 and click == 4:
@@ -407,22 +468,26 @@ class MouseAndSpeech:
         self.result_click = click
         if self.result_click != 3:
             if click == 4:
-                self.engine.say('Double Click')
+                if self.talk: self.speak.Speak('Double Click')
+                # self.engine.say('Double Click')
                 if self.move:
                     self.m_pyautogui.click(clicks=2, duration=self.b_duration)
             elif click == 2:
-                self.engine.say('Left Click')
+                # self.engine.say('Left Click')
+                if self.talk: self.speak.Speak('Left Click')
                 if self.move:
                     self.m_pyautogui.click(button='left', duration=self.b_duration)
             elif click == 1:
-                self.engine.say('Right Click')
+                # self.engine.say('Right Click')
+                if self.talk: self.speak.Speak('Right Click')
                 if self.move:
                     self.m_pyautogui.click(button='right', duration=self.b_duration)
 
     def handle_movement(self, direction):
         self.result_direction = direction
-        if self.result_direction not in [0, 4]:
-            self.engine.say(str(self.directions[direction]))
+        if self.result_direction not in [0, 2, 4, 6, 8]:
+            # self.engine.say(str(self.directions[direction]))
+            if self.talk: self.speak.Speak(str(self.directions[direction]))
             if self.move:
                 self.m_pyautogui.moveRel(xOffset=self.mouse_directions[direction][0],
                                          yOffset=self.mouse_directions[direction][1], duration=self.duration)
@@ -439,8 +504,11 @@ def main():
     t = Thread(target=detector.main)
     t.start()
 
-    engine = pyttsx3.init()
-    mouse = MouseAndSpeech(engine, pyautogui, move=False, talk=True, hor_div=20, ver_div=30)
+    # engine = pyttsx3.init()
+    speak = wincl.Dispatch("SAPI.SpVoice")
+    speak.Volume = 100
+    # speak.Rate = 5
+    mouse = MouseAndSpeech(speak, pyautogui, move=False, talk=True, hor_div=20, ver_div=30)
 
     while True:
         data = q1.get()
