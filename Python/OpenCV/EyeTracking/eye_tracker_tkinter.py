@@ -1,7 +1,7 @@
 import os
 from queue import Queue
 from threading import Thread
-from tkinter import Tk
+from tkinter import Tk, BooleanVar, IntVar
 from tkinter import ttk
 
 import cv2
@@ -13,7 +13,6 @@ from PIL import ImageTk
 
 
 # import pyttsx3
-# import profile
 
 
 def resource_path(relative_path):
@@ -39,6 +38,7 @@ class EyeTracker:
         self.eyeCascade = cv2.CascadeClassifier(resource_path("haarcascade_eye.xml"))
         self.faceCascade = cv2.CascadeClassifier(resource_path("haarcascade_frontalface_default.xml"))
 
+        self.scale = 0.5
         self.max_width = 0
         self.max_height = 0
         self.thresh = 0
@@ -46,18 +46,19 @@ class EyeTracker:
         self.eye_imgs = {'left': [], 'right': []}
         self.eyes_frame = None
         self.clicks = 0
-        self.video_capture = cv2.VideoCapture(1)
+        self.video_capture = cv2.VideoCapture(0)
         self.frame_width = int(self.video_capture.get(3))
         self.frame_height = int(self.video_capture.get(4))
+        self.fram_ratio = self.frame_width // self.frame_height
         self.face_dim = (0, 0)
         self.offset_left = 5
         self.offset_right = 10
         self.divs = (24, 3)
         self.centered_img = []
         self.fixed_eye = False
-        self.center_face = []
-        self.center_eye = []
-        self.center_retina = []
+        self.center_face = None
+        self.center_eye = [None] * 2
+        self.center_retina = [None] * 2
 
     def main(self):
         if self.start:
@@ -66,9 +67,9 @@ class EyeTracker:
 
             gray = self.detect_faces_eyes(frame)
 
-            if len(self.center_face) > 0 and len(self.center_eye) > 0:
+            if self.center_face is not None and self.center_eye[0] is not None and self.center_eye[1] is not None:
                 self.detect_eye_move(gray)
-                self.face_dim = self.center_face[0][1], self.center_face[0][2]
+                self.face_dim = self.center_face[1], self.center_face[2]
 
                 data = {
                     'Direction': self.direction.index(max(self.direction)),
@@ -86,41 +87,44 @@ class EyeTracker:
             return frame
 
     def draw(self, img):
-        if len(self.center_face) > 0:
+        if self.center_face is not None:
             rectangle = cv2.rectangle
-            for face in self.center_face:
-                rectangle(img,
-                          (face[0][0] - face[1] // 2, face[0][1] - face[2] // 2),
-                          (face[0][0] + face[1] // 2, face[0][1] + face[2] // 2),
-                          (0, 0, 0), 2)
+            face = self.center_face
+            rectangle(img,
+                      (face[0][0] - face[1] // 2, face[0][1] - face[2] // 2),
+                      (face[0][0] + face[1] // 2, face[0][1] + face[2] // 2),
+                      (0, 0, 0), 2)
 
             for eye in self.center_eye:
-                rectangle(img,
-                          (eye[0][0] - eye[1] // 2, eye[0][1] - eye[2] // 2),
-                          (eye[0][0] + eye[1] // 2, eye[0][1] + eye[2] // 2),
-                          (0, 0, 255), 2)
+                if eye is not None:
+                    rectangle(img,
+                              (eye[0][0] - eye[1] // 2, eye[0][1] - eye[2] // 2),
+                              (eye[0][0] + eye[1] // 2, eye[0][1] + eye[2] // 2),
+                              (0, 0, 255), 2)
 
             line = cv2.line
             for retina in self.center_retina:
-                line(img, (retina[0] - 10, retina[1]),
-                     (retina[0] + 10, retina[1]), (255, 0, 0), 2)
-                line(img, (retina[0], retina[1] - 10),
-                     (retina[0], retina[1] + 10), (255, 0, 0), 2)
+                if retina is not None:
+                    line(img, (retina[0] - 10, retina[1]),
+                         (retina[0] + 10, retina[1]), (255, 0, 0), 2)
+                    line(img, (retina[0], retina[1] - 10),
+                         (retina[0], retina[1] + 10), (255, 0, 0), 2)
 
-        img = cv2.resize(img, (0, 0), fx=0.66, fy=0.66)
+        img = cv2.resize(img, (0, 0), fx=self.scale, fy=self.scale)
         if self.eyes_frame is not None:
             img = self.vcat(self.eyes_frame, img)
 
         return img
 
     def control_input(self):
-        if not self.fixed_eye and len(self.center_retina) > 0:
+        if not self.fixed_eye and self.center_retina[0] is not None and self.center_retina[1] is not None:
             detected = False
 
             for center_retina in self.center_retina:
                 for center in self.center_eye:
-                    detected |= center[0][0] - center[1] // 2 < center_retina[0] < center[0][0] + center[1] // 2 and \
-                                center[0][1] - center[2] // 2 < center_retina[1] < center[0][1] + center[2] // 2
+                    if center is not None:
+                        detected |= center[0][0] - center[1] // 2 < center_retina[0] < center[0][0] + center[1] // 2 and \
+                                    center[0][1] - center[2] // 2 < center_retina[1] < center[0][1] + center[2] // 2
 
             if not detected:
                 self.direction[9] = -1
@@ -136,11 +140,11 @@ class EyeTracker:
         self.set_center = True
         self.thresh = 0
         self.face_dim = (0, 0)
-        self.center_eye.clear()
+        self.center_eye = [None] * 2
 
     def detect_faces_eyes(self, image):
-        self.center_retina.clear()
-        self.center_face.clear()
+        self.center_retina = [None] * 2
+        self.center_face = None
 
         image = cv2.cvtColor(image, cv2.COLOR_BGR2GRAY)
         br_level = int(cv2.mean(image)[0])
@@ -158,8 +162,9 @@ class EyeTracker:
         for (x, y, w, h) in faces:
             center_face = (x + w // 2, y + h // 2)
             roi = image[y:y + h, x:x + w]
-            self.center_face.append((center_face, w, h))
+            self.center_face = (center_face, w, h)
             self.detect_eyes(roi, x, y, w, h)
+            break
         return image
 
     def detect_eyes(self, roi_gray, x, y, w, h):
@@ -179,11 +184,12 @@ class EyeTracker:
             center_retina = (x + ex + ew // 2, y + ey + eh // 2)
 
             if y < center_retina[1] < y + h // 2:
-                if self.set_center and len(self.center_eye) <= 2:
-                    self.center_eye.append((center_retina, ew, eh))
-
-                self.center_retina.append(center_retina)
                 left_eye = center_retina[0] < x + w // 2
+                side = 0 if left_eye else 1
+                if self.set_center and self.center_eye[side] is None:
+                    self.center_eye[side] = (center_retina, ew, eh)
+
+                self.center_retina[side] = center_retina
 
                 if left_eye:
                     left_open = 1
@@ -197,15 +203,15 @@ class EyeTracker:
         font = cv2.FONT_HERSHEY_SIMPLEX
         cv2.putText(img, 'Press Space Bar', (32, 64), font, 0.7, (255, 255, 255), 2, cv2.LINE_AA)
 
-        if len(self.center_eye) > 0:
+        if self.center_eye[0] is not None:
             middle = src.shape[1] // 2
             for center in self.center_eye:
                 img = src[center[0][1] - center[2] // 2:center[0][1] + center[2] // 2,
                       center[0][0] - center[1] // 2:center[0][0] + center[1] // 2]
 
-                for face in self.center_face:
-                    if face[0][0] - face[1] < center[0][0] < face[0][0] + face[1]:
-                        middle = face[0][0]
+                face = self.center_face
+                if face[0][0] - face[1] < center[0][0] < face[0][0] + face[1]:
+                    middle = face[0][0]
                 left_eye = center[0][0] < middle
                 self.map_image(img, left_eye)
 
@@ -253,7 +259,7 @@ class EyeTracker:
 
             d = img_mapped_direction.argmin()
             if d != 0:
-                if len(self.center_retina) == 0:
+                if self.center_retina[0] is None and self.center_retina[1] is None:
                     self.direction[7] += 1
                 else:
                     self.direction[d] += 1
@@ -316,14 +322,13 @@ class EyeTracker:
                     f_image[y * h // div:(y + 1) * h // div, x * w // div: (x + 1) * w // div] = i.copy()
 
             if d != 0:
-                if len(self.center_retina) == 0:
+                if self.center_retina[0] is None:
                     self.direction[7] += 1
                 else:
                     self.direction[d] += 1
             return f_image
 
-    @staticmethod
-    def hcat(img_list1, padding=10, scale=2):
+    def hcat(self, img_list1, padding=10):
         max_width = []
         max_height = []
         n_images = 0
@@ -364,8 +369,11 @@ class EyeTracker:
             current_x = 0
 
         img_list1.clear()
+        h, w = final_image.shape[:2]
+        h = int(self.scale * self.frame_width * h / w)
+        w = int(self.scale * self.frame_width)
 
-        final_image = cv2.resize(final_image, (0, 0), fx=scale, fy=scale, interpolation=cv2.INTER_AREA)
+        final_image = cv2.resize(final_image, (w, h), interpolation=cv2.INTER_AREA)
 
         return final_image
 
@@ -412,16 +420,24 @@ class EyeTracker:
         return vis
 
     def __del__(self):
-        print('Eye Tracker')
+        # print('Eye Tracker')
         self.video_capture.release()
         self.q.put(False)
 
 
 class MouseAndSpeech:
-    def __init__(self, q, engine, m_pyautogui, move=True, talk=True, hor_div=16, ver_div=9):
+    def __init__(self, q, engine, m_pyautogui, move=None, talk=None, hor_div=None, ver_div=None):
         self.q = q
         self.talk = talk
         self.move = move
+        self.m_talk = self.talk.get()
+        self.m_move = self.move.get()
+        self.hor_div = hor_div
+        self.m_hor_div = self.hor_div.get()
+
+        self.ver_div = ver_div
+        self.m_ver_div = self.ver_div.get()
+
         self.m_pyautogui = m_pyautogui
         # self.engine = engine
         self.speak = engine
@@ -435,27 +451,45 @@ class MouseAndSpeech:
         self.direction_samples = [0] * 9
         self.result_direction = 0
 
-        w, h = self.m_pyautogui.size()
-        x_offset = w // hor_div
-        y_offset = h // ver_div
-        self.duration = 0.2
-        self.m_pyautogui.FAIL_SAFE = True
-        self.m_pyautogui.PAUSE = self.duration
-        self.m_pyautogui.moveTo(x=w // 2, y=h // 2, duration=self.duration)
-
+        self.w, self.h = self.m_pyautogui.size()
+        x_offset = self.w // self.m_hor_div
+        y_offset = self.h // self.m_ver_div
         self.mouse_directions = [0,
                                  (0, -y_offset), 0,
                                  (-x_offset, 0), 0,
                                  (x_offset, 0), 0,
                                  (0, y_offset), 0, 0]
+        self.duration = 0.2
+        self.m_pyautogui.FAIL_SAFE = True
+        self.m_pyautogui.PAUSE = self.duration
+        self.m_pyautogui.moveTo(x=self.w // 2, y=self.h // 2, duration=self.duration)
+
         self.click_samples = [0] * 4
         self.b_duration = 0.1
         self.result_click = 0
 
     def process(self):
         while True:
+            try:
+                self.m_talk = self.talk.get()
+                self.m_move = self.move.get()
+                if self.hor_div.get() != self.m_hor_div or self.ver_div.get() != self.m_ver_div:
+                    self.m_hor_div = self.hor_div.get()
+                    self.m_ver_div = self.ver_div.get()
+                    print(self.hor_div.get())
+                    x_offset = self.w // self.m_hor_div
+                    y_offset = self.h // self.m_ver_div
+                    self.mouse_directions = [0,
+                                             (0, -y_offset), 0,
+                                             (-x_offset, 0), 0,
+                                             (x_offset, 0), 0,
+                                             (0, y_offset), 0, 0]
+            except:
+                pass
+
             data = self.q.get()
             self.q.task_done()
+
             if not data:
                 break
 
@@ -489,27 +523,27 @@ class MouseAndSpeech:
         self.result_click = click
         if self.result_click != 3:
             if click == 4:
-                if self.talk: self.speak.Speak('Double Click')
+                if self.m_talk: self.speak.Speak('Double Click')
                 # self.engine.say('Double Click')
-                if self.move:
+                if self.m_move:
                     self.m_pyautogui.click(clicks=2, duration=self.b_duration)
             elif click == 2:
                 # self.engine.say('Left Click')
-                if self.talk: self.speak.Speak('Left Click')
-                if self.move:
+                if self.m_talk: self.speak.Speak('Left Click')
+                if self.m_move:
                     self.m_pyautogui.click(button='left', duration=self.b_duration)
             elif click == 1:
                 # self.engine.say('Right Click')
-                if self.talk: self.speak.Speak('Right Click')
-                if self.move:
+                if self.m_talk: self.speak.Speak('Right Click')
+                if self.m_move:
                     self.m_pyautogui.click(button='right', duration=self.b_duration)
 
     def handle_movement(self, direction):
         self.result_direction = direction
         if self.result_direction not in [0, 2, 4, 6, 8]:
             # self.engine.say(str(self.directions[direction]))
-            if self.talk: self.speak.Speak(str(self.directions[direction]))
-            if self.move:
+            if self.m_talk: self.speak.Speak(str(self.directions[direction]))
+            if self.m_move:
                 self.m_pyautogui.moveRel(xOffset=self.mouse_directions[direction][0],
                                          yOffset=self.mouse_directions[direction][1], duration=self.duration)
 
@@ -519,34 +553,77 @@ class MouseAndSpeech:
         self.direction_samples = [0] * 9
 
     def __del__(self):
-        print('Mouse And Speech')
+        pass
+        # print('Mouse And Speech')
 
 
 class EyeTrackerTkinter:
     def __init__(self):
+        self.root = Tk()
+        self.talk = BooleanVar()
+        self.talk.set(True)
+
+        self.move = BooleanVar()
+        self.move.set(False)
+
+        self.hor_div = IntVar()
+        self.hor_div.set(20)
+        self.ver_div = IntVar()
+        self.ver_div.set(30)
+
         q = Queue()
         speak = wincl.Dispatch("SAPI.SpVoice")
         speak.Volume = 100
-        mouse = MouseAndSpeech(q, speak, pyautogui, move=False, talk=True, hor_div=20, ver_div=30)
-        t = Thread(target=mouse.process)
+
+        self.mouse = MouseAndSpeech(q, speak, pyautogui,
+                                    move=self.move, talk=self.talk,
+                                    hor_div=self.hor_div, ver_div=self.ver_div)
+        t = Thread(target=self.mouse.process)
         t.start()
 
         self.q = q
         self.t = t
         self.eye_tracker = EyeTracker(q)
+
         self.frame = None
         self.draw = False
         self.fps = 15
 
-        self.root = Tk()
         self.root.iconbitmap(default=resource_path('icon.ico'))
         self.root.title("Eye Tracker Tkinter")
-        self.panel = None
-        self.button_start = ttk.Button(self.root, text="Start", command=self.toggle_draw)
-        self.button_start.grid(row=0, column=0, sticky="nsew", padx=10, pady=10, columnspan=2)
+
+        self.button_start = ttk.Button(self.root, text="Start/Pause", command=self.toggle_draw)
+        self.button_start.grid(row=0, column=0, sticky="new", padx=10, pady=10)
 
         self.button_scan = ttk.Button(self.root, text="Scan", command=self.eye_tracker.scan)
-        self.button_scan.grid(row=0, column=2, sticky="nsew", padx=10, pady=10, columnspan=2)
+        self.button_scan.grid(row=0, column=1, sticky="new", padx=10, pady=10)
+
+        self.button_move = ttk.Checkbutton(self.root, text="Move Mouse", var=self.mouse.move)
+        self.button_move.grid(row=1, column=0, sticky="new", padx=10, pady=10)
+
+        self.button_speak = ttk.Checkbutton(self.root, text="Speak", var=self.talk)
+        self.button_speak.grid(row=1, column=1, sticky="new", padx=10, pady=10)
+
+        self.frame_hor_div = ttk.Frame(self.root)
+        self.frame_hor_div.grid(row=2, column=0, sticky="new", padx=10, pady=10)
+
+        self.panel = ttk.Label(self.frame_hor_div, text='Horizontal Division')
+        self.panel.pack(anchor='nw')
+
+        self.entry_hor_div = ttk.Entry(self.frame_hor_div, textvariable=self.hor_div)
+        self.entry_hor_div.pack(anchor='nw')
+
+        self.frame_ver_div = ttk.Frame(self.root)
+        self.frame_ver_div.grid(row=2, column=1, sticky="new", padx=10, pady=10)
+
+        self.panel = ttk.Label(self.frame_ver_div, text='Vertical Division')
+        self.panel.pack(anchor='w')
+
+        self.entry_ver_div = ttk.Entry(self.frame_ver_div, textvariable=self.ver_div)
+        self.entry_ver_div.pack(anchor='w')
+
+        self.panel = ttk.Label()
+        self.panel.grid(row=3, column=0, sticky="new", padx=10, pady=10, columnspan=2)
 
         self.videoLoop()
 
@@ -557,13 +634,8 @@ class EyeTrackerTkinter:
             image = Image.fromarray(image)
             image = ImageTk.PhotoImage(image)
 
-            if self.panel is None:
-                self.panel = ttk.Label(image=image)
-                self.panel.image = image
-                self.panel.grid(row=1, column=0, sticky="nsew", padx=10, pady=10, columnspan=4)
-            else:
-                self.panel.configure(image=image)
-                self.panel.image = image
+            self.panel.configure(image=image)
+            self.panel.image = image
 
         self.root.after(1000 // self.fps, self.videoLoop)
 
@@ -572,10 +644,10 @@ class EyeTrackerTkinter:
         self.eye_tracker.start ^= 1
 
     def __del__(self):
-        print('Tkinter')
+        # print('Tkinter')
         self.q.put(False)
         self.q.join()
-        self.t.join()
+        self.t.join(timeout=1)
         self.root.quit()
 
 
@@ -585,5 +657,5 @@ def main():
 
 
 if __name__ == '__main__':
-    # profile.run('main()', sort=2)
+    # profile.run('main()', sort=0)
     main()
