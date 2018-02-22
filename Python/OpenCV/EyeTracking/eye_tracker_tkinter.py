@@ -29,6 +29,7 @@ def resource_path(relative_path):
 
 class EyeTracker:
     def __init__(self, q):
+        self.start = False
         self.q = q
         self.directions = [0, 'Top', 0,
                            'Left', 'Center', 'Right',
@@ -49,7 +50,6 @@ class EyeTracker:
         self.frame_width = int(self.video_capture.get(3))
         self.frame_height = int(self.video_capture.get(4))
         self.face_dim = (0, 0)
-        self.fps = 15
         self.offset_left = 5
         self.offset_right = 10
         self.divs = (24, 3)
@@ -60,29 +60,30 @@ class EyeTracker:
         self.center_retina = []
 
     def main(self):
-        ret, frame = self.video_capture.read()
-        frame = cv2.flip(frame, 1)
+        if self.start:
+            ret, frame = self.video_capture.read()
+            frame = cv2.flip(frame, 1)
 
-        gray = self.detect_faces_eyes(frame)
+            gray = self.detect_faces_eyes(frame)
 
-        if len(self.center_face) > 0 and len(self.center_eye) > 0:
-            self.detect_eye_move(gray)
-            self.face_dim = self.center_face[0][1], self.center_face[0][2]
+            if len(self.center_face) > 0 and len(self.center_eye) > 0:
+                self.detect_eye_move(gray)
+                self.face_dim = self.center_face[0][1], self.center_face[0][2]
 
-            data = {
-                'Direction': self.direction.index(max(self.direction)),
-                'Clicks': self.clicks,
-            }
-            self.q.put(data)
+                data = {
+                    'Direction': self.direction.index(max(self.direction)),
+                    'Clicks': self.clicks,
+                }
+                self.q.put(data)
 
-        frame = self.draw(frame)
+            frame = self.draw(frame)
 
-        self.direction.clear()
-        self.direction = [0] * 10
+            self.direction.clear()
+            self.direction = [0] * 10
 
-        self.control_input()
+            self.control_input()
 
-        return frame
+            return frame
 
     def draw(self, img):
         if len(self.center_face) > 0:
@@ -134,6 +135,7 @@ class EyeTracker:
     def scan(self):
         self.set_center = True
         self.thresh = 0
+        self.face_dim = (0, 0)
         self.center_eye.clear()
 
     def detect_faces_eyes(self, image):
@@ -533,31 +535,41 @@ class EyeTrackerTkinter:
         self.t = t
         self.eye_tracker = EyeTracker(q)
         self.frame = None
-        self.thread = None
-        self.stopEvent = None
+        self.draw = False
+        self.fps = 15
 
         self.root = Tk()
+        self.root.iconbitmap(default=resource_path('icon.ico'))
+        self.root.title("Eye Tracker Tkinter")
         self.panel = None
+        self.button_start = ttk.Button(self.root, text="Start", command=self.toggle_draw)
+        self.button_start.grid(row=0, column=0, sticky="nsew", padx=10, pady=10, columnspan=2)
+
+        self.button_scan = ttk.Button(self.root, text="Scan", command=self.eye_tracker.scan)
+        self.button_scan.grid(row=0, column=2, sticky="nsew", padx=10, pady=10, columnspan=2)
 
         self.videoLoop()
 
-        self.root.wm_title("Eye Tracker Tkinter")
-
     def videoLoop(self):
-        image = self.eye_tracker.main()
-        image = cv2.cvtColor(image, cv2.COLOR_BGR2RGB)
-        image = Image.fromarray(image)
-        image = ImageTk.PhotoImage(image)
+        if self.draw:
+            image = self.eye_tracker.main()
+            image = cv2.cvtColor(image, cv2.COLOR_BGR2RGB)
+            image = Image.fromarray(image)
+            image = ImageTk.PhotoImage(image)
 
-        if self.panel is None:
-            self.panel = ttk.Label(image=image)
-            self.panel.image = image
-            self.panel.pack(side="left", padx=10, pady=10)
-        else:
-            self.panel.configure(image=image)
-            self.panel.image = image
+            if self.panel is None:
+                self.panel = ttk.Label(image=image)
+                self.panel.image = image
+                self.panel.grid(row=1, column=0, sticky="nsew", padx=10, pady=10, columnspan=4)
+            else:
+                self.panel.configure(image=image)
+                self.panel.image = image
 
-        self.root.after(33, self.videoLoop)
+        self.root.after(1000 // self.fps, self.videoLoop)
+
+    def toggle_draw(self):
+        self.draw ^= 1
+        self.eye_tracker.start ^= 1
 
     def __del__(self):
         print('Tkinter')
