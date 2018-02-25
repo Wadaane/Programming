@@ -1,5 +1,5 @@
 import os
-from queue import Queue
+from queue import LifoQueue
 from threading import Thread
 from tkinter import Tk, ttk, BooleanVar, IntVar
 
@@ -14,7 +14,6 @@ from PIL import ImageTk
 # import profile
 # import pyttsx3
 
-
 def resource_path(relative_path):
     """ Get absolute path to resource, works for dev and for PyInstaller """
     try:
@@ -24,6 +23,21 @@ def resource_path(relative_path):
         base_path = os.path.abspath(".")
 
     return os.path.join(base_path, relative_path)
+
+
+def clear_queue(q):
+    """
+        Clears all items from the queue.
+    """
+    with q.mutex:
+        unfinished = q.unfinished_tasks - len(q.queue)
+        if unfinished <= 0:
+            if unfinished < 0:
+                raise ValueError('task_done() called too many times')
+        q.all_tasks_done.notify_all()
+        q.unfinished_tasks = unfinished
+        q.queue.clear()
+        q.not_full.notify_all()
 
 
 class EyeTracker:
@@ -62,6 +76,7 @@ class EyeTracker:
         self.center_face = None
         self.center_eye = [None] * 2
         self.center_retina = [None] * 2
+        self.mouse = [[None] * 3] * 2
 
     def main(self):
         if self.start:
@@ -82,12 +97,14 @@ class EyeTracker:
                 data = {
                     'Direction': self.direction.index(max(self.direction)),
                     'Clicks': self.clicks,
+                    'Mouse': self.mouse,
                 }
                 self.q.put(data)
 
             frame = self.draw(frame)
 
             self.direction = [0] * 10
+            self.mouse = [[None] * 3] * 2
             self.control_input()
 
             return frame
@@ -184,14 +201,14 @@ class EyeTracker:
         if len(self.eye_imgs[side]) == 0:
             # Crop Image, to avoid eyebrows and corner of the eye.
             img_mapped_black = src.copy()
-            self.limit_bounds(img_mapped_black, h, w)
+            # self.limit_bounds(img_mapped_black, h, w)
 
             # Get Threshold and turn image into Black and White.
             thresh = np.min(img_mapped_black) + 0.1 * np.mean(img_mapped_black)
             img_mapped_black = cv2.threshold(img_mapped_black, int(thresh), 255, cv2.THRESH_BINARY)[1]
 
             # Draw a Circle at the center of the original image (For Debug)
-            center = self.get_draw_center(img_mapped_black, src, color=255, side=side)
+            center = self.get_draw_center(img_mapped_black, src, color=255)
 
             # Resize image into 3x3.
             img_mapped_direction = cv2.resize(img_mapped_black, (3, 3), interpolation=cv2.INTER_AREA)
@@ -210,6 +227,7 @@ class EyeTracker:
                 img_mapped_direction[2, 1] = 0
 
             # Get Location of darkest pixel (That must be the retina)
+            self.mouse[side] = center, self.center_eye[side][1], self.center_eye[side][2]
             d = img_mapped_direction.argmin()
             self.direction[d] += 1
 
@@ -348,8 +366,9 @@ class EyeTracker:
             src[:, 0: -offset] = 255
 
     @staticmethod
-    def get_draw_center(src, dst, radius=5, color=0, side=0):
+    def get_draw_center(src, dst, radius=5, color=0):
         try:
+            radius = radius * src.shape[1] // 100
             output = cv2.connectedComponentsWithStats(src, connectivity=8, ltype=cv2.CV_32S)
             center = output[3][0]
             cv2.circle(dst, (int(center[0]), int(center[1])), radius, color, thickness=-1)
@@ -451,12 +470,11 @@ class EyeTracker:
 
 
 class MouseAndSpeech:
-    def __init__(self, q, engine, m_pyautogui, move=False, talk=True, hor_div=None, ver_div=None):
+    def __init__(self, q, engine, m_pyautogui, move=False, talk=False, hor_div=None, ver_div=None, samples=9):
+        self.mouse = None
         self.q = q
-        self.talk = talk
-        self.move = move
-        self.m_talk = self.talk
-        self.m_move = self.move
+        self.m_talk = talk
+        self.m_move = move
         self.hor_div = hor_div
         self.m_hor_div = self.hor_div.get()
 
@@ -466,7 +484,7 @@ class MouseAndSpeech:
         self.m_pyautogui = m_pyautogui
         # self.engine = engine
         self.speak = engine
-        self.max_samples = 9
+        self.max_samples = samples
         self.n_samples = 0
 
         self.directions = ['Top Left', 'Up', 'Top Right',
@@ -477,6 +495,7 @@ class MouseAndSpeech:
         self.result_direction = 0
 
         self.w, self.h = self.m_pyautogui.size()
+        self.x, self.y = self.w // 2, self.h // 2
         x_offset = self.w // self.m_hor_div
         y_offset = self.h // self.m_ver_div
         self.mouse_directions = [(-x_offset, -y_offset), (0, -y_offset), (x_offset, -y_offset),
@@ -486,7 +505,7 @@ class MouseAndSpeech:
         self.duration = 0.2
         self.m_pyautogui.FAIL_SAFE = True
         self.m_pyautogui.PAUSE = self.duration
-        self.m_pyautogui.moveTo(x=self.w // 2, y=self.h // 2, duration=self.duration)
+        # self.m_pyautogui.moveTo(x=self.w // 2, y=self.h // 2, duration=self.duration)
 
         self.click_samples = [0] * 4
         self.b_duration = 0.1
@@ -518,6 +537,15 @@ class MouseAndSpeech:
                     self.n_samples += 1
                     self.direction_samples[data['Direction']] += 1
                     self.click_samples[data['Clicks']] += 1
+
+                    # self.mouse = data['Mouse']
+                    # center, w, h = self.mouse[1]
+                    # x, y = self.lerp((center[0] / w, center[1] / h))
+                    #
+                    # self.m_pyautogui.moveTo(x=x * self.w*1.1,
+                    #                         y=y * self.h*1.1, duration=0)
+                    # print('x: {:.2} y: {:.2}'.format(x, y))
+
                 else:
                     self.n_samples = 0
                     click = self.click_samples.index(max(self.click_samples))
@@ -537,6 +565,8 @@ class MouseAndSpeech:
                     #     self.engine.runAndWait()
                     # else:
                     #     self.engine.stop()
+
+            clear_queue(self.q)
 
     def handle_click(self, click):
         if self.result_click == 4 and click == 2 or self.result_click == 2 and click == 4:
@@ -573,15 +603,28 @@ class MouseAndSpeech:
         self.click_samples = [0] * 4
         self.direction_samples = [0] * 9
 
+    def lerp(self, center, per=0.5):
+        x, y = center
+        x = self.x + (x - self.x) * per
+        y = self.y + (y - self.y) * per
+        self.x = x
+        self.y = y
+        return x, y
+
     def __del__(self):
         print('Mouse And Speech')
 
 
 class EyeTrackerTkinter:
-    def __init__(self):
+    def __init__(self, fps=20, samples=9):
         self.root = Tk()
         self.talk = BooleanVar()
         self.talk.set(True)
+
+        self.fps = IntVar()
+        self.fps.set(fps)
+
+        self.samples = samples
 
         self.move = BooleanVar()
         self.move.set(False)
@@ -591,14 +634,15 @@ class EyeTrackerTkinter:
         self.ver_div = IntVar()
         self.ver_div.set(30)
 
-        self.q = Queue()
+        self.q = LifoQueue()
         speak = wincl.Dispatch("SAPI.SpVoice")
         speak.Volume = 100
         speak.Rate = 2
 
         self.mouse = MouseAndSpeech(self.q, speak, pyautogui,
-                                    move=False, talk=True,
-                                    hor_div=self.hor_div, ver_div=self.ver_div)
+                                    move=self.move.get(), talk=self.talk.get(),
+                                    hor_div=self.hor_div, ver_div=self.ver_div,
+                                    samples=samples)
         self.t = Thread(target=self.mouse.process)
         self.t.start()
 
@@ -608,43 +652,39 @@ class EyeTrackerTkinter:
         self.root.geometry('+%d+%d' % (w, 0))
         self.frame = None
         self.draw = False
-        self.fps = 20
 
         self.root.iconbitmap(default=resource_path('icon.ico'))
         self.root.title("Eye Tracker")
 
         self.button_start = ttk.Button(self.root, text="Start", command=self.toggle_draw)
-        self.button_start.grid(row=0, column=0, sticky="new", padx=10, pady=10)
-
         self.button_scan = ttk.Button(self.root, text="Calibrate", command=self.eye_tracker.scan)
-        self.button_scan.grid(row=0, column=1, sticky="new", padx=10, pady=10)
-
         self.button_move = ttk.Checkbutton(self.root, text="Move Mouse", command=self.toggle_speak_move, var=self.move)
-        self.button_move.grid(row=1, column=0, sticky="new", padx=10, pady=10)
-
         self.button_speak = ttk.Checkbutton(self.root, text="Audio", command=self.toggle_speak_move, var=self.talk)
-        self.button_speak.grid(row=1, column=1, sticky="new", padx=10, pady=10)
-
+        self.frame_fps = ttk.Frame(self.root)
+        self.panel = ttk.Label(self.frame_fps, text='FPS')
+        self.panel.pack(anchor='nw')
+        self.entry_fps = ttk.Entry(self.frame_fps, textvariable=self.fps)
+        self.entry_fps.pack(anchor='nw')
         self.frame_hor_div = ttk.Frame(self.root)
-        self.frame_hor_div.grid(row=2, column=0, sticky="new", padx=10, pady=10)
-
         self.panel = ttk.Label(self.frame_hor_div, text='Horizontal Division')
         self.panel.pack(anchor='nw')
-
         self.entry_hor_div = ttk.Entry(self.frame_hor_div, textvariable=self.hor_div)
         self.entry_hor_div.pack(anchor='nw')
-
         self.frame_ver_div = ttk.Frame(self.root)
-        self.frame_ver_div.grid(row=2, column=1, sticky="new", padx=10, pady=10)
-
         self.panel = ttk.Label(self.frame_ver_div, text='Vertical Division')
         self.panel.pack(anchor='w')
-
         self.entry_ver_div = ttk.Entry(self.frame_ver_div, textvariable=self.ver_div)
         self.entry_ver_div.pack(anchor='w')
+        self.panel_video = ttk.Label()
 
-        self.panel = ttk.Label()
-        self.panel.grid(row=3, column=0, sticky="new", padx=10, pady=10, columnspan=2)
+        self.button_start.grid(row=0, column=0, sticky="new", padx=10, pady=10)
+        self.button_scan.grid(row=1, column=0, sticky="new", padx=10, pady=10)
+        self.button_move.grid(row=2, column=0, sticky="new", padx=10, pady=10)
+        self.button_speak.grid(row=3, column=0, sticky="new", padx=10, pady=10)
+        self.frame_hor_div.grid(row=4, column=0, sticky="new", padx=10, pady=10)
+        self.frame_ver_div.grid(row=5, column=0, sticky="new", padx=10, pady=10)
+        self.frame_fps.grid(row=6, column=0, sticky="new", padx=10, pady=10)
+        self.panel_video.grid(row=0, column=1, sticky="new", padx=10, pady=10, rowspan=100)
 
         self.videoLoop()
 
@@ -655,10 +695,16 @@ class EyeTrackerTkinter:
             image = Image.fromarray(image)
             image = ImageTk.PhotoImage(image)
 
-            self.panel.configure(image=image)
-            self.panel.image = image
+            self.panel_video.configure(image=image)
+            self.panel_video.image = image
 
-        self.root.after(1000 // self.fps, self.videoLoop)
+        try:
+            fps = self.fps.get()
+            if fps > 50:
+                fps = 50
+            self.root.after(1000 // fps, self.videoLoop)
+        except:
+            self.root.after(1000 // 10, self.videoLoop)
 
     def toggle_draw(self):
         self.draw ^= 1
@@ -666,10 +712,12 @@ class EyeTrackerTkinter:
         self.button_start.config(text="Pause" if self.draw else "Resume")
 
     def toggle_speak_move(self):
+        clear_queue(self.q)
         self.q.put((self.talk.get(), self.move.get()))
 
     def __del__(self):
         print('Tkinter')
+        clear_queue(self.q)
         self.q.put(False)
         self.q.join()
         self.t.join()
@@ -677,7 +725,7 @@ class EyeTrackerTkinter:
 
 
 def main():
-    eye_tracker_tkinter = EyeTrackerTkinter()
+    eye_tracker_tkinter = EyeTrackerTkinter(fps=10, samples=3)
     eye_tracker_tkinter.root.mainloop()
 
 
