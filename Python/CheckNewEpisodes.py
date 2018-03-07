@@ -124,11 +124,11 @@ def get_urls():
             text = ' '.join(text)
             url = _a.get('href')
 
-            if serie[0] in text:
+            if serie[0].upper() in text.upper():
                 number = text.strip()[text.find('Season'):]
                 if len(number) > 1:
                     for episode in downloaded_list:
-                        if episode[0] in text:
+                        if episode[0].upper() in text.upper():
                             d = re.findall(r'\d+', episode[1])
                             a = re.findall(r'\d+', number)
 
@@ -166,7 +166,6 @@ def launch_browser():
     for data in urls:
         text, url = data
         if input('\t\t' + text + ' Download ? y/n ') == 'y':
-            # print(text, url)
             req = requests.get(url)
             soup = BeautifulSoup(req.text, 'html.parser')
             _as = soup.find_all('a')
@@ -178,7 +177,6 @@ def launch_browser():
                 if len(link_text) > 0:
                     if link_text.strip().startswith(text.strip()):
                         link = a.get('href')
-                        # print(link)
                         link = get_video_url(link)
                         links.append(link)
 
@@ -209,9 +207,9 @@ def main():
     print('\tGet latest downloaded episodes in local folders ...')
     get_paths()
     get_downloaded_list()
+
     print('\tGet new releases list from website ...')
     if get_series_list():
-        # get_episodes_list()
         print('\tCheck if there is new episodes to download ...')
         get_urls()
         launch_browser()

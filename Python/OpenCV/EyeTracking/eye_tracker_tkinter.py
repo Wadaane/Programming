@@ -6,13 +6,14 @@ from tkinter import Tk, ttk, BooleanVar, IntVar
 import cv2
 import numpy as np
 import pyautogui
-import win32com.client as wincl
+import pyttsx3
 from PIL import Image
 from PIL import ImageTk
 
 
+# import win32com.client as wincl
 # import profile
-# import pyttsx3
+
 
 def resource_path(relative_path):
     """ Get absolute path to resource, works for dev and for PyInstaller """
@@ -470,7 +471,7 @@ class EyeTracker:
 
 
 class MouseAndSpeech:
-    def __init__(self, q, engine, m_pyautogui, move=False, talk=False, hor_div=None, ver_div=None, samples=9):
+    def __init__(self, q, move=False, talk=False, hor_div=None, ver_div=None, samples=9):
         self.mouse = None
         self.q = q
         self.m_talk = talk
@@ -481,9 +482,9 @@ class MouseAndSpeech:
         self.ver_div = ver_div
         self.m_ver_div = self.ver_div.get()
 
-        self.m_pyautogui = m_pyautogui
-        # self.engine = engine
-        self.speak = engine
+        self.m_pyautogui = pyautogui
+        self.engine = pyttsx3.init()
+
         self.max_samples = samples
         self.n_samples = 0
 
@@ -505,7 +506,6 @@ class MouseAndSpeech:
         self.duration = 0.2
         self.m_pyautogui.FAIL_SAFE = True
         self.m_pyautogui.PAUSE = self.duration
-        # self.m_pyautogui.moveTo(x=self.w // 2, y=self.h // 2, duration=self.duration)
 
         self.click_samples = [0] * 4
         self.b_duration = 0.1
@@ -561,10 +561,10 @@ class MouseAndSpeech:
 
                     self.reset()
 
-                    # if self.talk:
-                    #     self.engine.runAndWait()
-                    # else:
-                    #     self.engine.stop()
+                    if self.m_talk:
+                        self.engine.runAndWait()
+                    else:
+                        self.engine.stop()
 
             clear_queue(self.q)
 
@@ -574,26 +574,22 @@ class MouseAndSpeech:
         self.result_click = click
         if self.result_click != 3:
             if click == 4:
-                if self.m_talk: self.speak.Speak('Double Click')
-                # self.engine.say('Double Click')
+                if self.m_talk: self.engine.say('Double Click')
                 if self.m_move:
                     self.m_pyautogui.click(clicks=2, duration=self.b_duration)
             elif click == 2:
-                # self.engine.say('Left Click')
-                if self.m_talk: self.speak.Speak('Left Click')
+                if self.m_talk: self.engine.say('Left Click')
                 if self.m_move:
                     self.m_pyautogui.click(button='left', duration=self.b_duration)
             elif click == 1:
-                # self.engine.say('Right Click')
-                if self.m_talk: self.speak.Speak('Right Click')
+                if self.m_talk: self.engine.say('Right Click')
                 if self.m_move:
                     self.m_pyautogui.click(button='right', duration=self.b_duration)
 
     def handle_movement(self, direction):
         self.result_direction = direction
         if self.result_direction != 4:
-            # self.engine.say(str(self.directions[direction]))
-            if self.m_talk: self.speak.Speak(str(self.directions[direction]))
+            if self.m_talk: self.engine.say(str(self.directions[direction]))
             if self.m_move:
                 self.m_pyautogui.moveRel(xOffset=self.mouse_directions[direction][0],
                                          yOffset=self.mouse_directions[direction][1], duration=self.duration)
@@ -635,11 +631,7 @@ class EyeTrackerTkinter:
         self.ver_div.set(30)
 
         self.q = LifoQueue()
-        speak = wincl.Dispatch("SAPI.SpVoice")
-        speak.Volume = 100
-        speak.Rate = 2
-
-        self.mouse = MouseAndSpeech(self.q, speak, pyautogui,
+        self.mouse = MouseAndSpeech(self.q,
                                     move=self.move.get(), talk=self.talk.get(),
                                     hor_div=self.hor_div, ver_div=self.ver_div,
                                     samples=samples)
@@ -653,7 +645,7 @@ class EyeTrackerTkinter:
         self.frame = None
         self.draw = False
 
-        self.root.iconbitmap(default=resource_path('icon.ico'))
+        # self.root.iconbitmap(default=resource_path('icon.ico'))
         self.root.title("Eye Tracker")
 
         self.button_start = ttk.Button(self.root, text="Start", command=self.toggle_draw)
