@@ -87,18 +87,15 @@ class MyApp(Tk):
         self.ver_div = IntVar()
         self.ver_div.set(30)
 
-        self.mouse = MouseAndSpeech(self.q,
-                                    move=self.move.get(), talk=self.talk.get(),
-                                    hor_div=self.hor_div, ver_div=self.ver_div,
-                                    samples=self.samples)
+        self.mouse = MouseAndSpeech(self)
         self.t = Thread(target=self.mouse.process)
         self.t.start()
 
         self.frame = None
         self.draw = False
 
-        frame = EyeTrackerTkinter(container, self)
-        self.frames[EyeTrackerTkinter] = frame
+        frame = Preview(container, self)
+        self.frames[Preview] = frame
         frame.grid(row=0, column=1, sticky="nsew", rowspan=100)
         self.current_frame = frame
 
@@ -123,7 +120,7 @@ class MyApp(Tk):
         self.protocol("WM_DELETE_WINDOW", lambda: self.close())
 
     def show_frame(self, cont):
-        if self.current_frame is not None:  # , self.frames[EyeTrackerTkinter]):
+        if self.current_frame is not None:
             self.current_frame.grid_remove()
         frame = self.frames[cont]
         frame.grid()
@@ -140,6 +137,9 @@ class MyApp(Tk):
             elif indicator == 'h' and value == '1':
                 self.ac.set(False)
                 self.serial.send_serial('f0')
+            elif indicator == 't':
+                self.heater.set(False)
+                self.ac.set(False)
 
             s = indicator + value
             self.serial.send_serial(s)
@@ -163,8 +163,8 @@ class MyMenu(Menu):
         Menu.__init__(self)
 
         apps = Menu(self)
-        apps.add_command(label=parent.frames[EyeTrackerTkinter].__title__,
-                         command=lambda: parent.show_frame(EyeTrackerTkinter))
+        apps.add_command(label=parent.frames[Preview].__title__,
+                         command=lambda: parent.show_frame(Preview))
         apps.add_command(label=parent.frames[Settings].__title__,
                          command=lambda: parent.show_frame(Settings))
         apps.add_command(label=parent.frames[Applications].__title__,
@@ -179,8 +179,8 @@ class MyMenu(Menu):
         self.add_cascade(label='Help', menu=info)
 
 
-class EyeTrackerTkinter(Frame):
-    __title__ = 'Eye Tracker'
+class Preview(Frame):
+    __title__ = 'Preview'
 
     def __init__(self, parent, controller):
         Frame.__init__(self, parent)
@@ -217,7 +217,7 @@ class EyeTrackerTkinter(Frame):
 
     def toggle_draw(self):
         if self.controller.eye_tracker.started is None:
-            self.controller.show_frame(EyeTrackerTkinter)
+            self.controller.show_frame(Preview)
         self.controller.draw ^= 1
         self.controller.eye_tracker.start ^= 1
         self.button_start.config(text="Pause" if self.controller.draw else "Resume")
@@ -242,22 +242,31 @@ class Settings(Frame):
         self.panel.pack(anchor='nw')
         self.entry_fps = ttk.Entry(self.frame_fps, textvariable=self.controller.fps)
         self.entry_fps.pack(anchor='nw')
+
         self.frame_hor_div = ttk.Frame(self)
         self.panel = ttk.Label(self.frame_hor_div, text='Horizontal Division')
         self.panel.pack(anchor='nw')
         self.entry_hor_div = ttk.Entry(self.frame_hor_div, textvariable=self.controller.hor_div)
         self.entry_hor_div.pack(anchor='nw')
+
         self.frame_ver_div = ttk.Frame(self)
         self.panel = ttk.Label(self.frame_ver_div, text='Vertical Division')
         self.panel.pack(anchor='w')
         self.entry_ver_div = ttk.Entry(self.frame_ver_div, textvariable=self.controller.ver_div)
         self.entry_ver_div.pack(anchor='w')
 
+        self.frame_temp = ttk.Frame(self)
+        self.panel = ttk.Label(self.frame_temp, text='Temperature Offset')
+        self.panel.pack(anchor='nw')
+        self.entry_temp_offset = ttk.Entry(self.frame_temp, textvariable=self.controller.temp_offset)
+        self.entry_temp_offset.pack(anchor='nw')
+
         self.button_move.grid(row=2, column=0, sticky="new", padx=10, pady=10)
         self.button_speak.grid(row=3, column=0, sticky="new", padx=10, pady=10)
         self.frame_hor_div.grid(row=4, column=0, sticky="new", padx=10, pady=10)
         self.frame_ver_div.grid(row=5, column=0, sticky="new", padx=10, pady=10)
         self.frame_fps.grid(row=6, column=0, sticky="new", padx=10, pady=10)
+        self.frame_temp.grid(row=7, column=0, sticky="new", padx=10, pady=10)
 
     def toggle_speak_move(self):
         clear_queue(self.controller.q)
@@ -286,14 +295,9 @@ class Applications(Frame):
 
         self.frame_temp = ttk.Frame(self)
         self.panel = ttk.Label(self.frame_temp, textvariable=self.controller.temp_current)
-        self.panel.grid(row=0, column=0, sticky="sew", padx=10, pady=10)
+        self.panel.pack(anchor='w')
         self.entry_temp = ttk.Entry(self.frame_temp, textvariable=self.controller.temp)
-        self.entry_temp.grid(row=1, column=0, sticky="new", padx=10, pady=10)
-
-        self.panel = ttk.Label(self.frame_temp, text='Offset')
-        self.panel.grid(row=0, column=1, sticky="sew", padx=10, pady=10)
-        self.entry_temp_offset = ttk.Entry(self.frame_temp, textvariable=self.controller.temp_offset)
-        self.entry_temp_offset.grid(row=1, column=1, sticky="new", padx=10, pady=10)
+        self.entry_temp.pack(anchor='w')
 
         self.frame_window = ttk.Frame(self)
         self.panel_window = ttk.Label(self.frame_window, text='Window')
@@ -312,40 +316,16 @@ class Applications(Frame):
         self.button_group_window100.pack(side='left')
 
         self.button_alarm.grid(row=0, column=0, sticky="new", padx=10, pady=10)
-        self.button_light.grid(row=1, column=0, sticky="new", padx=10, pady=10)
-        self.button_heater.grid(row=2, column=0, sticky="new", padx=10, pady=10)
-        self.button_ac.grid(row=3, column=0, sticky="new", padx=10, pady=10)
-        self.frame_temp.grid(row=4, column=0, sticky="new", padx=10, pady=10)
-        self.frame_window.grid(row=5, column=0, sticky="new", padx=10, pady=10)
+        self.button_light.grid(row=0, column=1, sticky="new", padx=10, pady=10)
+        self.button_heater.grid(row=0, column=2, sticky="new", padx=10, pady=10)
+        self.button_ac.grid(row=0, column=3, sticky="new", padx=10, pady=10)
+        self.frame_temp.grid(row=0, column=4, sticky="new", padx=10, pady=10)
+        self.frame_window.grid(row=0, column=5, sticky="new", padx=10, pady=10)
+
+        self.button_alarm.focus()
 
     def __del__(self):
         print(self.__title__)
-
-
-def resource_path(relative_path):
-    """ Get absolute path to resource, works for dev and for PyInstaller """
-    try:
-        # PyInstaller creates a temp folder and stores path in _MEIPASS
-        base_path = sys._MEIPASS
-    except Exception:
-        base_path = os.path.abspath(".")
-
-    return os.path.join(base_path, relative_path)
-
-
-def clear_queue(q):
-    """
-        Clears all items from the queue.
-    """
-    with q.mutex:
-        unfinished = q.unfinished_tasks - len(q.queue)
-        if unfinished <= 0:
-            if unfinished < 0:
-                raise ValueError('task_done() called too many times')
-        q.all_tasks_done.notify_all()
-        q.unfinished_tasks = unfinished
-        q.queue.clear()
-        q.not_full.notify_all()
 
 
 class EyeTracker:
@@ -783,16 +763,18 @@ class EyeTracker:
 class MouseAndSpeech:
     __title__ = 'Mouse And Speech'
 
-    def __init__(self, q, move=False, talk=False, hor_div=None, ver_div=None, samples=9):
+    def __init__(self, controller):
+        self.controller = controller
+
         self.isTalking = False
         self.mouse = None
-        self.q = q
-        self.m_talk = talk
-        self.m_move = move
-        self.hor_div = hor_div
+        self.q = self.controller.q
+        self.m_talk = self.controller.talk.get()
+        self.m_move = self.controller.move.get()
+        self.hor_div = self.controller.hor_div
         self.m_hor_div = self.hor_div.get()
 
-        self.ver_div = ver_div
+        self.ver_div = self.controller.ver_div
         self.m_ver_div = self.ver_div.get()
 
         self.m_pyautogui = pyautogui
@@ -800,7 +782,7 @@ class MouseAndSpeech:
         # self.engine.connect('started-utterance', self.onStart)
         # self.engine.connect('finished-utterance', self.onEnd)
 
-        self.max_samples = samples
+        self.max_samples = self.controller.samples
         self.n_samples = 0
 
         self.directions = ['Top Left', 'Up', 'Top Right',
@@ -870,9 +852,16 @@ class MouseAndSpeech:
                     direction = self.direction_samples.index(max(self.direction_samples))
 
                     if self.result_click != click:
-                        self.handle_click(click)
+                        if self.m_talk:
+                            self.handle_talk(False, click)
+                        if self.m_move:
+                            self.handle_click(click)
+
                     elif self.result_direction != direction:
-                        self.handle_movement(direction)
+                        if self.m_talk:
+                            self.handle_talk(True, direction)
+                        if self.m_move:
+                            self.handle_movement(direction)
 
                     self.reset()
 
@@ -885,27 +874,51 @@ class MouseAndSpeech:
         if self.result_click == 4 and click == 2 or self.result_click == 2 and click == 4:
             return
         self.result_click = click
-        if self.result_click != 3:
-            if click == 4:
-                if self.m_talk: self.engine.say('Double Click')
-                if self.m_move:
+
+        if self.controller.current_frame is self.controller.frames[Applications]:
+            w = self.controller.focus_get()
+            if click != 3:
+                w.invoke()
+        else:
+            if self.result_click != 3:
+                if click == 4:
                     self.m_pyautogui.click(clicks=2, duration=self.b_duration)
-            elif click == 2:
-                if self.m_talk: self.engine.say('Left Click')
-                if self.m_move:
+                elif click == 2:
                     self.m_pyautogui.click(button='left', duration=self.b_duration)
-            elif click == 1:
-                if self.m_talk: self.engine.say('Right Click')
-                if self.m_move:
+                elif click == 1:
                     self.m_pyautogui.click(button='right', duration=self.b_duration)
 
     def handle_movement(self, direction):
-        self.result_direction = direction
-        if self.result_direction != 4:
-            if self.m_talk: self.engine.say(str(self.directions[direction]))
-            if self.m_move:
+        if self.controller.current_frame is self.controller.frames[Applications]:
+            w = self.controller.focus_get()
+
+            if direction == 3:
+                w.tk_focusPrev().focus()
+            elif direction == 5:
+                w.tk_focusNext().focus()
+        else:
+            self.result_direction = direction
+            if self.result_direction != 4:
                 self.m_pyautogui.moveRel(xOffset=self.mouse_directions[direction][0],
                                          yOffset=self.mouse_directions[direction][1], duration=self.duration)
+
+    def handle_talk(self, movement, click):
+        if movement:
+            direction = click
+            self.result_direction = direction
+            if self.result_direction != 4:
+                if self.m_talk: self.engine.say(str(self.directions[direction]))
+        else:
+            if self.result_click == 4 and click == 2 or self.result_click == 2 and click == 4:
+                return
+            self.result_click = click
+            if self.result_click != 3:
+                if click == 4:
+                    self.engine.say('Double Click')
+                elif click == 2:
+                    self.engine.say('Left Click')
+                elif click == 1:
+                    self.engine.say('Right Click')
 
     def reset(self):
         self.n_samples = 0
@@ -934,7 +947,12 @@ class MouseAndSpeech:
 
 class SerialComm:
     def __init__(self):
-        self.port = serial.Serial('COM5', baudrate=9600, timeout=1)
+        self.connected = False
+        try:
+            self.port = serial.Serial('COM5', baudrate=9600, timeout=1)
+            self.connected = True
+        except:
+            pass
 
     def read_serial(self):
         res = ''
@@ -946,6 +964,32 @@ class SerialComm:
     def send_serial(self, text):
         text += '#'
         self.port.write(text.encode())
+
+
+def resource_path(relative_path):
+    """ Get absolute path to resource, works for dev and for PyInstaller """
+    try:
+        # PyInstaller creates a temp folder and stores path in _MEIPASS
+        base_path = sys._MEIPASS
+    except Exception:
+        base_path = os.path.abspath(".")
+
+    return os.path.join(base_path, relative_path)
+
+
+def clear_queue(q):
+    """
+        Clears all items from the queue.
+    """
+    with q.mutex:
+        unfinished = q.unfinished_tasks - len(q.queue)
+        if unfinished <= 0:
+            if unfinished < 0:
+                raise ValueError('task_done() called too many times')
+        q.all_tasks_done.notify_all()
+        q.unfinished_tasks = unfinished
+        q.queue.clear()
+        q.not_full.notify_all()
 
 
 if __name__ == '__main__':

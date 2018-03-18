@@ -46,7 +46,7 @@ def get_downloaded_list():
 
             file_name, file_ext = os.path.splitext(file)
 
-            if len(files) == 1:
+            if len(files) < 1:
                 continue
 
             i = 1
@@ -75,13 +75,14 @@ def get_downloaded_list():
             file_name = file_name[:index - 1].strip()  # .replace('.', ' ').strip()
             number = 'Season ' + str(int(season)) + ' Episode ' + str(int(episode))
             downloaded_list.append([file_name, number])
+
         except:
             print('get_downloaded_list(): File Error: ' + file)
 
 
-def get_series_list():
+def get_series_urls():
     """
-    Get list of new releases.
+    Get each serie episode list URL.
     """
     try:
         r = requests.get(web_url)
@@ -102,12 +103,13 @@ def get_series_list():
         for title_path in titles_paths:
             if text.upper().strip() == title_path[0].upper().strip() and [text, url] not in series:
                 series.append([text, url])
+
     if len(series) < 1:
         print('\tNo new Releases.')
     return True
 
 
-def get_urls():
+def get_episodes_urls():
     """
     Get the URLs for not downloaded episodes.
     """
@@ -144,7 +146,6 @@ def get_urls():
                             ep_available = int(a[1])
 
                             if se_downloaded <= se_available and ep_downloaded < ep_available:
-                                # if input('\t\t' + text + ' Download ? y/n ') == 'y':
                                 urls.append((text, url))
 
     if len(urls) < 1:
@@ -209,9 +210,9 @@ def main():
     get_downloaded_list()
 
     print('\tGet new releases list from website ...')
-    if get_series_list():
-        print('\tCheck if there is new episodes to download ...')
-        get_urls()
+    if get_series_urls():
+        print('\tCheck if there are new episodes to download ...')
+        get_episodes_urls()
         launch_browser()
     input('\tPress Enter to exit.')
 
