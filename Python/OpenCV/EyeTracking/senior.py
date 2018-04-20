@@ -2,7 +2,7 @@ import os
 import sys
 from queue import LifoQueue
 from threading import Thread
-from tkinter import Tk, ttk, BooleanVar, IntVar, StringVar, Frame, Menu, messagebox
+from tkinter import Tk, ttk, BooleanVar, IntVar, StringVar, Frame, Menu, messagebox, DoubleVar
 
 import cv2
 import numpy as np
@@ -43,6 +43,9 @@ class MyApp(Tk):
         self.temp_current = StringVar()
         self.temp_current.set('Temperature')
 
+        self.tts = StringVar()
+        self.tts.set('Type and Play')
+
         self.temp_offset = IntVar()
         self.temp_offset.set(5)
         self.temp_offset.trace("w", self.send_command)
@@ -54,9 +57,11 @@ class MyApp(Tk):
         self.window.trace("w", self.send_command)
         self.variables[self.window.__str__()] = 'w', self.window
 
+        self.mouse_control = BooleanVar()
+        self.mouse_control.set(False)
+
         self.talk = BooleanVar()
         self.talk.set(True)
-        self.talk.trace("w", self.send_command)
 
         self.alarm = BooleanVar()
         self.alarm.set(False)
@@ -79,13 +84,21 @@ class MyApp(Tk):
         self.variables[self.ac.__str__()] = 'f', self.ac
 
         self.move = BooleanVar()
-        self.move.set(False)
+        self.move.set(True)
 
-        self.hor_div = IntVar()
-        self.hor_div.set(20)
+        self.w, self.h = pyautogui.size()
 
-        self.ver_div = IntVar()
-        self.ver_div.set(30)
+        self.hor_div = DoubleVar()
+        self.hor_div.set(5)
+        self.hor_div.trace("w", self.send_command)
+        self.variables[self.hor_div.__str__()] = 'hor', self.hor_div
+
+        self.ver_div = DoubleVar()
+        self.ver_div.set(5)
+        self.ver_div.trace("w", self.send_command)
+        self.variables[self.ver_div.__str__()] = 'ver', self.ver_div
+
+        self.mouse_directions = []
 
         self.mouse = MouseAndSpeech(self)
         self.t = Thread(target=self.mouse.process)
@@ -126,6 +139,9 @@ class MyApp(Tk):
         frame.grid()
         self.current_frame = frame
 
+        if cont is Applications:
+            frame.button_alarm.focus()
+
     def send_command(self, widget, *args):
         w = self.variables[widget]
         try:
@@ -143,6 +159,21 @@ class MyApp(Tk):
 
             s = indicator + value
             self.serial.send_serial(s)
+
+            if len(value) > 0:
+                value = float(w[1].get())
+                if indicator in ['ver', 'hor']:
+                    x_offset = self.ver_div.get()
+                    y_offset = self.hor_div.get()
+                    if indicator == 'ver':
+                        y_offset = value * (self.h // 100)
+                    elif indicator == 'hor':
+                        x_offset = value * (self.w // 100)
+
+                    self.mouse_directions = [(-x_offset, -y_offset), (0, -y_offset), (x_offset, -y_offset),
+                                             (-x_offset, 0), 0, (x_offset, 0),
+                                             (-x_offset, y_offset), (0, y_offset), (x_offset, y_offset),
+                                             0]
         except:
             pass
 
@@ -172,10 +203,13 @@ class MyMenu(Menu):
         apps.add_command(label='Exit', command=lambda: parent.close())
         self.add_cascade(label='View', menu=apps)
 
+        text_help = 'Instructions\nlink to website'
+        text_about = 'Wadaane, Mohamed\nIsra Abdel Wahab\nSenior Project, 2018'
         info = Menu(self)
-        info.add_command(label='Help', command=lambda: print('Help'))
-        info.add_command(label='About',
-                         command=lambda: messagebox.showinfo('About', 'About us text \netc \netc \netc'))
+        info.add_command(label='Help',
+                         command=lambda: messagebox.showinfo('Help', text_help))
+        info.add_command(label='About us',
+                         command=lambda: messagebox.showinfo('About us', text_about))
         self.add_cascade(label='Help', menu=info)
 
 
@@ -244,13 +278,13 @@ class Settings(Frame):
         self.entry_fps.pack(anchor='nw')
 
         self.frame_hor_div = ttk.Frame(self)
-        self.panel = ttk.Label(self.frame_hor_div, text='Horizontal Division')
+        self.panel = ttk.Label(self.frame_hor_div, text='Horizontal Division (%)')
         self.panel.pack(anchor='nw')
         self.entry_hor_div = ttk.Entry(self.frame_hor_div, textvariable=self.controller.hor_div)
         self.entry_hor_div.pack(anchor='nw')
 
         self.frame_ver_div = ttk.Frame(self)
-        self.panel = ttk.Label(self.frame_ver_div, text='Vertical Division')
+        self.panel = ttk.Label(self.frame_ver_div, text='Vertical Division (%)')
         self.panel.pack(anchor='w')
         self.entry_ver_div = ttk.Entry(self.frame_ver_div, textvariable=self.controller.ver_div)
         self.entry_ver_div.pack(anchor='w')
@@ -287,20 +321,36 @@ class Applications(Frame):
         self.toggle_light = None
         self.toggle_alarm = None
         self.controller = controller
+        self.q = self.controller.q
 
-        self.button_alarm = ttk.Checkbutton(self, text="Alarm", var=self.controller.alarm)
-        self.button_light = ttk.Checkbutton(self, text="Light", var=self.controller.light)
-        self.button_heater = ttk.Checkbutton(self, text="Heater", var=self.controller.heater)
-        self.button_ac = ttk.Checkbutton(self, text="AC", var=self.controller.ac)
+        self.frame_buttons = ttk.Frame(self)
+        self.button_mouse = ttk.Checkbutton(self.frame_buttons, text="Mouse", var=self.controller.mouse_control)
+        self.button_mouse.pack(side='left')
+        self.button_alarm = ttk.Checkbutton(self.frame_buttons, text="Alarm", var=self.controller.alarm)
+        self.button_alarm.pack(side='left')
+        self.button_light = ttk.Checkbutton(self.frame_buttons, text="Light", var=self.controller.light)
+        self.button_light.pack(side='left', padx=5)
+        self.button_heater = ttk.Checkbutton(self.frame_buttons, text="Heater", var=self.controller.heater)
+        self.button_heater.pack(side='left', padx=5)
+        self.button_ac = ttk.Checkbutton(self.frame_buttons, text="AC", var=self.controller.ac)
+        self.button_ac.pack(side='left', padx=5)
 
         self.frame_temp = ttk.Frame(self)
         self.panel = ttk.Label(self.frame_temp, textvariable=self.controller.temp_current)
         self.panel.pack(anchor='w')
-        self.entry_temp = ttk.Entry(self.frame_temp, textvariable=self.controller.temp)
-        self.entry_temp.pack(anchor='w')
+        self.temp_down = ttk.Button(self.frame_temp, text="<<", width='3',
+                                    command=lambda: self.controller.temp.set(int(self.controller.temp.get() - 1)))
+        self.temp_down.pack(side='left')
+        self.entry_temp = ttk.Entry(self.frame_temp, textvariable=self.controller.temp, width=3)
+        self.entry_temp.pack(side='left')
+        self.temp_up = ttk.Button(self.frame_temp, text=">>", width='3',
+                                  command=lambda: self.controller.temp.set(int(self.controller.temp.get() + 1)))
+        self.temp_up.pack(side='left')
 
         self.frame_window = ttk.Frame(self)
         self.panel_window = ttk.Label(self.frame_window, text='Window')
+        self.panel_window.pack(anchor='w')
+
         self.button_group_window0 = ttk.Radiobutton(self.frame_window, text='0%',
                                                     variable=self.controller.window, value=0)
         self.button_group_window25 = ttk.Radiobutton(self.frame_window, text='25%',
@@ -309,20 +359,24 @@ class Applications(Frame):
                                                      variable=self.controller.window, value=50)
         self.button_group_window100 = ttk.Radiobutton(self.frame_window, text='100%',
                                                       variable=self.controller.window, value=100)
-        self.panel_window.pack(anchor='w')
         self.button_group_window0.pack(side='left')
         self.button_group_window25.pack(side='left')
         self.button_group_window50.pack(side='left')
         self.button_group_window100.pack(side='left')
 
-        self.button_alarm.grid(row=0, column=0, sticky="new", padx=10, pady=10)
-        self.button_light.grid(row=0, column=1, sticky="new", padx=10, pady=10)
-        self.button_heater.grid(row=0, column=2, sticky="new", padx=10, pady=10)
-        self.button_ac.grid(row=0, column=3, sticky="new", padx=10, pady=10)
-        self.frame_temp.grid(row=0, column=4, sticky="new", padx=10, pady=10)
-        self.frame_window.grid(row=0, column=5, sticky="new", padx=10, pady=10)
+        self.frame_tts = ttk.Frame(self)
+        self.panel = ttk.Label(self.frame_tts, text='Text-To-Speech (work in progress)')
+        self.panel.pack(anchor='nw')
+        self.entry_tts = ttk.Entry(self.frame_tts, textvariable=self.controller.tts)
+        self.entry_tts.pack(anchor='w')
+        self.button_tts_play = ttk.Button(self.frame_tts, text='Play',
+                                          command=lambda: self.q.put((self.controller.tts.get(), None)))
+        self.button_tts_play.pack(anchor='w')
 
-        self.button_alarm.focus()
+        self.frame_buttons.grid(row=0, column=0, sticky="new", padx=10, pady=10, columnspan=100)
+        self.frame_temp.grid(row=1, column=0, sticky="new", padx=10, pady=10, columnspan=100)
+        self.frame_window.grid(row=2, column=0, sticky="new", padx=10, pady=10)
+        self.frame_tts.grid(row=3, column=0, sticky="new", padx=10, pady=10)
 
     def __del__(self):
         print(self.__title__)
@@ -489,11 +543,12 @@ class EyeTracker:
 
         side = 0 if left else 1
         if len(self.eye_imgs[side]) == 0:
-            # Crop Image, to avoid eyebrows and corner of the eye.
             img_mapped_black = src.copy()
+
+            # Crop Image, to avoid eyebrows and corner of the eye.
             self.limit_bounds(img_mapped_black, h, w)
 
-            # Get Threshold and turn image into Black and White.
+            # Get Threshold and turn image into binary, Black and White.
             thresh = np.min(img_mapped_black) + 0.1 * np.mean(img_mapped_black)
             img_mapped_black = cv2.threshold(img_mapped_black, int(thresh), 255, cv2.THRESH_BINARY)[1]
 
@@ -506,7 +561,7 @@ class EyeTracker:
             # Resize image into 3x3.
             img_mapped_direction = cv2.resize(img_mapped_black, (3, 3), interpolation=cv2.INTER_AREA)
 
-            # Get Threshold and turn image into Black and White.
+            # Get Threshold and turn image into binary, Black and White.
             thresh = np.min(img_mapped_direction)
             img_mapped_direction = cv2.threshold(img_mapped_direction, thresh, 255, cv2.THRESH_BINARY)[1]
 
@@ -685,10 +740,10 @@ class EyeTracker:
 
     @staticmethod
     def limit_bounds(img_mapped_black, h, w):
-        img_mapped_black[:int(h * 0.1), :] = 255
-        img_mapped_black[int(h * 0.9):, :] = 255
-        img_mapped_black[:, :int(w * 0.1)] = 255
-        img_mapped_black[:, int(w * 0.9):] = 255
+        img_mapped_black[:int(h * 0.2), :] = 255
+        img_mapped_black[int(h * 0.8):, :] = 255
+        img_mapped_black[:, :int(w * 0.2)] = 255
+        img_mapped_black[:, int(w * 0.8):] = 255
 
     @staticmethod
     def hcat(img_list1, window_size, padding=10):
@@ -794,12 +849,13 @@ class MouseAndSpeech:
 
         self.w, self.h = self.m_pyautogui.size()
         self.x, self.y = self.w // 2, self.h // 2
-        x_offset = self.w // self.m_hor_div
-        y_offset = self.h // self.m_ver_div
-        self.mouse_directions = [(-x_offset, -y_offset), (0, -y_offset), (x_offset, -y_offset),
-                                 (-x_offset, 0), 0, (x_offset, 0),
-                                 (-x_offset, y_offset), (0, y_offset), (x_offset, y_offset),
-                                 0]
+        x_offset = self.m_hor_div * self.w // 100
+        y_offset = self.m_ver_div * self.h // 100
+
+        self.controller.mouse_directions = [(-x_offset, -y_offset), (0, -y_offset), (x_offset, -y_offset),
+                                            (-x_offset, 0), 0, (x_offset, 0),
+                                            (-x_offset, y_offset), (0, y_offset), (x_offset, y_offset),
+                                            0]
         self.duration = 0.2
         self.m_pyautogui.FAIL_SAFE = True
         self.m_pyautogui.PAUSE = self.duration
@@ -810,6 +866,7 @@ class MouseAndSpeech:
 
     def process(self):
         while True:
+            self.mouse_directions = self.controller.mouse_directions
             data = self.q.get()
             self.q.task_done()
 
@@ -817,18 +874,15 @@ class MouseAndSpeech:
                 break
 
             if isinstance(data, tuple):
+                if data[1] is None:
+                    print('Text to speech', data[0])
+                    self.engine.say(data[0])
+                    self.engine.runAndWait()
+                    clear_queue(self.q)
+                    continue
+
                 self.m_talk = data[0]
                 self.m_move = data[1]
-                if self.hor_div.get() != self.m_hor_div or self.ver_div.get() != self.m_ver_div:
-                    self.m_hor_div = self.hor_div.get()
-                    self.m_ver_div = self.ver_div.get()
-                    x_offset = self.w // self.m_hor_div
-                    y_offset = self.h // self.m_ver_div
-                    self.mouse_directions = [0,
-                                             (0, -y_offset), 0,
-                                             (-x_offset, 0), 0,
-                                             (x_offset, 0), 0,
-                                             (0, y_offset), 0, 0]
             else:
                 if self.n_samples <= self.max_samples:
                     self.n_samples += 1
@@ -862,13 +916,13 @@ class MouseAndSpeech:
                             self.handle_talk(True, direction)
                         if self.m_move:
                             self.handle_movement(direction)
-
+                        clear_queue(self.q)
                     self.reset()
 
                     if self.m_talk:
                         self.engine.runAndWait()
 
-            clear_queue(self.q)
+            # clear_queue(self.q)
 
     def handle_click(self, click):
         if self.result_click == 4 and click == 2 or self.result_click == 2 and click == 4:
@@ -878,7 +932,10 @@ class MouseAndSpeech:
         if self.controller.current_frame is self.controller.frames[Applications]:
             w = self.controller.focus_get()
             if click != 3:
-                w.invoke()
+                try:
+                    w.invoke()
+                except:
+                    pass
         else:
             if self.result_click != 3:
                 if click == 4:
@@ -889,18 +946,19 @@ class MouseAndSpeech:
                     self.m_pyautogui.click(button='right', duration=self.b_duration)
 
     def handle_movement(self, direction):
-        if self.controller.current_frame is self.controller.frames[Applications]:
+        if self.controller.current_frame is self.controller.frames[
+            Applications] and not self.controller.mouse_control.get():
             w = self.controller.focus_get()
 
-            if direction == 3:
+            if direction in [0, 1, 3, 6]:
                 w.tk_focusPrev().focus()
-            elif direction == 5:
+            elif direction in [2, 5, 7, 8]:
                 w.tk_focusNext().focus()
         else:
             self.result_direction = direction
             if self.result_direction != 4:
-                self.m_pyautogui.moveRel(xOffset=self.mouse_directions[direction][0],
-                                         yOffset=self.mouse_directions[direction][1], duration=self.duration)
+                self.m_pyautogui.moveRel(xOffset=self.controller.mouse_directions[direction][0],
+                                         yOffset=self.controller.mouse_directions[direction][1], duration=self.duration)
 
     def handle_talk(self, movement, click):
         if movement:
@@ -948,22 +1006,32 @@ class MouseAndSpeech:
 class SerialComm:
     def __init__(self):
         self.connected = False
+        self.port = self.connect()
+
+    def connect(self):
+        self.connected = False
         try:
-            self.port = serial.Serial('COM5', baudrate=9600, timeout=1)
+            port = serial.Serial('COM5', baudrate=9600, timeout=1)
             self.connected = True
+            return port
         except:
-            pass
+            return None
 
     def read_serial(self):
         res = ''
         try:
             res = self.port.readline().decode()
+        except:
+            self.port = self.connect()
         finally:
             return res
 
     def send_serial(self, text):
         text += '#'
-        self.port.write(text.encode())
+        try:
+            self.port.write(text.encode())
+        except:
+            self.port = self.connect()
 
 
 def resource_path(relative_path):

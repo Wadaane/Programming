@@ -50,7 +50,7 @@ def get_downloaded_list():
                 continue
 
             i = 1
-            while file_ext == '' or (file_ext != '.avi' and file_ext != '.mkv' and file_ext != '.mp4'):
+            while file_ext == '' or (file_ext not in ['.avi', '.mkv', '.mp4', '.MP4']):
                 if i < 0:
                     continue
 
