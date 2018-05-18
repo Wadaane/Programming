@@ -194,9 +194,10 @@ class MyApp(Tk):
         """
 
         print(self.__title__)
-        self.eye_tracker.video_capture.release()
         if self.mouse.isTalking:
-            self.destroy()
+            self.mouse.engine.endLoop()
+
+        self.eye_tracker.video_capture.release()
         clear_queue(self.q)
         self.q.put(False)
         self.q.join()
@@ -891,8 +892,8 @@ class MouseAndSpeech:
 
         self.m_pyautogui = pyautogui
         self.engine = pyttsx3.init()
-        # self.engine.connect('started-utterance', self.onStart)
-        # self.engine.connect('finished-utterance', self.onEnd)
+        self.engine.connect('started-utterance', self.onStart)
+        self.engine.connect('finished-utterance', self.onEnd)
 
         self.max_samples = self.controller.samples
         self.n_samples = 0
@@ -1041,11 +1042,9 @@ class MouseAndSpeech:
         self.direction_samples = [0] * 9
 
     def onStart(self, name):
-        print('Started')
         self.isTalking = True
 
     def onEnd(self, name, completed):
-        print('Ended')
         self.isTalking = False
 
     def lerp(self, center, per=0.5):
@@ -1072,7 +1071,7 @@ class SerialComm:
             self.connected = True
             return port
         except:
-            print('No Arduino')
+            # print('No Arduino')
             return None
 
     def read_serial(self):
