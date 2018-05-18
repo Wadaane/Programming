@@ -16,6 +16,11 @@ LARGE_FONT = ("Pulsa", 12)
 
 
 class MyApp(Tk):
+    """
+    This class serves as a central control.
+    Where are all process are launched and variables are set and shared.
+    """
+
     __title__ = "Senior"
 
     def __init__(self, *args, **kwargs):
@@ -84,7 +89,7 @@ class MyApp(Tk):
         self.variables[self.ac.__str__()] = 'f', self.ac
 
         self.move = BooleanVar()
-        self.move.set(True)
+        self.move.set(False)
 
         self.w, self.h = pyautogui.size()
 
@@ -133,6 +138,9 @@ class MyApp(Tk):
         self.protocol("WM_DELETE_WINDOW", lambda: self.close())
 
     def show_frame(self, cont):
+        """
+        This method is used to switch betwen views.
+        """
         if self.current_frame is not None:
             self.current_frame.grid_remove()
         frame = self.frames[cont]
@@ -143,6 +151,9 @@ class MyApp(Tk):
             frame.button_alarm.focus()
 
     def send_command(self, widget, *args):
+        """
+        This method send data to the Arduino whenever a button is clicked.
+        """
         w = self.variables[widget]
         try:
             indicator = w[0]
@@ -178,6 +189,10 @@ class MyApp(Tk):
             pass
 
     def close(self):
+        """
+        Method used to to close the program orderly so no threads are left hanging.
+        """
+
         print(self.__title__)
         self.eye_tracker.video_capture.release()
         if self.mouse.isTalking:
@@ -190,6 +205,10 @@ class MyApp(Tk):
 
 
 class MyMenu(Menu):
+    """
+    This class is used to create the Menu items and their actions.
+    """
+
     def __init__(self, parent):
         Menu.__init__(self)
 
@@ -214,6 +233,10 @@ class MyMenu(Menu):
 
 
 class Preview(Frame):
+    """
+    Preview Page class.
+    """
+
     __title__ = 'Preview'
 
     def __init__(self, parent, controller):
@@ -230,6 +253,9 @@ class Preview(Frame):
         self.videoLoop()
 
     def videoLoop(self):
+        """
+         Video window is refreshed with processed images from the the Eye Tracker class.
+        """
         if self.controller.draw:
             image = self.controller.eye_tracker.main()
             image = cv2.cvtColor(image, cv2.COLOR_BGR2RGB)
@@ -250,6 +276,10 @@ class Preview(Frame):
             self.after(1000 // 10, self.videoLoop)
 
     def toggle_draw(self):
+        """
+        Method used to pause and resume the video capture and display.
+        """
+
         if self.controller.eye_tracker.started is None:
             self.controller.show_frame(Preview)
         self.controller.draw ^= 1
@@ -261,6 +291,10 @@ class Preview(Frame):
 
 
 class Settings(Frame):
+    """
+    Settings page class.
+    """
+
     __title__ = 'Settings'
 
     def __init__(self, parent, controller):
@@ -303,6 +337,10 @@ class Settings(Frame):
         self.frame_temp.grid(row=7, column=0, sticky="new", padx=10, pady=10)
 
     def toggle_speak_move(self):
+        """
+        Send audio feedback and mouse movement settings to Mouse and Speech Class.
+        """
+
         clear_queue(self.controller.q)
         self.controller.q.put((self.controller.talk.get(), self.controller.move.get()))
 
@@ -311,6 +349,10 @@ class Settings(Frame):
 
 
 class Applications(Frame):
+    """
+    Applications Page Class.
+    """
+
     __title__ = 'Applications'
 
     def __init__(self, parent, controller):
@@ -383,6 +425,10 @@ class Applications(Frame):
 
 
 class EyeTracker:
+    """
+    This is where the image acquisition and processing take place.
+    """
+
     __title__ = 'Eye Tracker'
 
     def __init__(self, q):
@@ -423,6 +469,13 @@ class EyeTracker:
         self.mouse = [[None] * 3] * 2
 
     def main(self):
+        """
+        This is where eveything take place in the Eye Tracker Class.
+        Image are acquired then processed to extract direction and actions.
+        Direction and actions are sent to Mouse and Speech Class.
+        Processed image are sent back to the preview page to be displayed.
+        """
+
         if self.start:
             if self.start != self.started:
                 self.started = self.start
@@ -454,12 +507,16 @@ class EyeTracker:
             return frame
 
     def detect_faces_eyes(self, image):
+        """
+
+        """
+
         self.center_face = None
 
         image = cv2.cvtColor(image, cv2.COLOR_BGR2GRAY)
-        br_level = int(cv2.mean(image)[0])
-        if br_level < 128:
-            cv2.equalizeHist(image, image)
+        # br_level = int(cv2.mean(image)[0])
+        # if br_level < 128:
+        #     cv2.equalizeHist(image, image)
 
         faces = self.faceCascade.detectMultiScale(
             image,
@@ -483,9 +540,9 @@ class EyeTracker:
         left_open = 0
         right_open = 0
 
-        br_level = int(cv2.mean(roi_gray)[0])
-        if br_level < 128:
-            cv2.equalizeHist(roi_gray, roi_gray)
+        # br_level = int(cv2.mean(roi_gray)[0])
+        # if br_level < 128:
+        #     cv2.equalizeHist(roi_gray, roi_gray)
 
         eyes = self.eyeCascade.detectMultiScale(roi_gray,
                                                 scaleFactor=1.1,
@@ -1015,6 +1072,7 @@ class SerialComm:
             self.connected = True
             return port
         except:
+            print('No Arduino')
             return None
 
     def read_serial(self):
