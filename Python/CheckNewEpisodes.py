@@ -6,8 +6,8 @@ import requests
 from bs4 import BeautifulSoup
 
 paths = [
-    'E:\Series\Comedie',
-    'E:\Series\Autre'
+    'D:\Series\Comedie',
+    'D:\Series\Autre'
 ]
 web_url = 'https://www.couchtuner.rocks/tv-shows/'
 web_url2 = 'http://www.couch-tuner.la/tv-lists/'
