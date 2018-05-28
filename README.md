@@ -15,4 +15,5 @@ Git Cheatsheet:
     git commit -m "comment"
     git remote add origin https://github.com/Wadaane/Programming.git
     git push -u origin master
+    git push origin :<remote branch>  # Deletes <remote branch>
 
