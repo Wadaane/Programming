@@ -4,13 +4,13 @@ from queue import LifoQueue
 from threading import Thread
 from tkinter import Tk, ttk, BooleanVar, IntVar, StringVar, Frame, Menu, messagebox, DoubleVar
 
-import cv2
 import numpy as np
 import pyautogui
-import pyttsx3
 import serial
 from PIL import Image
 from PIL import ImageTk
+import cv2
+import win32com.client as wincl
 
 LARGE_FONT = ("Pulsa", 12)
 
@@ -131,7 +131,7 @@ class MyApp(Tk):
         menu = MyMenu(self)
         self.config(menu=menu)
 
-        Tk.iconbitmap(self, default='icon.ico')
+        Tk.iconbitmap(self, default=resource_path('icon.ico'))
         Tk.wm_title(self, "Senior")
         w = (self.winfo_screenwidth() - self.eye_tracker.window_size) // 2
         self.geometry('+{}+{}'.format(w, 0))
@@ -194,8 +194,8 @@ class MyApp(Tk):
         """
 
         print(self.__title__)
-        if self.mouse.isTalking:
-            self.mouse.engine.endLoop()
+        while self.mouse.isTalking:
+            print('Is Talking')
 
         self.eye_tracker.video_capture.release()
         clear_queue(self.q)
@@ -574,7 +574,7 @@ class EyeTracker:
         for center in self.center_eye:
             (x, y), w, h = center
             img = src[y - h // 2:y + h // 2,
-                  x - w // 2:x + w // 2]
+                      x - w // 2:x + w // 2]
 
             (f_x, f_y), f_w, f_h = self.center_face
             if f_x - f_w < x < f_x + f_w:
@@ -662,7 +662,7 @@ class EyeTracker:
         for y in range(div):
             for x in range(div):
                 i = img[y * h // div:(y + 1) * h // div,
-                    x * w // div: (x + 1) * w // div]
+                        x * w // div: (x + 1) * w // div]
                 i = i.copy()
                 br = cv2.mean(i)
                 if not return_image:
@@ -677,7 +677,7 @@ class EyeTracker:
             for y in range(div):
                 for x in range(div):
                     i = img[y * h // div:(y + 1) * h // div,
-                        x * w // div: (x + 1) * w // div]
+                            x * w // div: (x + 1) * w // div]
                     i = i.copy()
                     br = cv2.mean(i)
                     if h * 0.3 < y < h * 0.7 or w * 0.3 < x < w * 0.7:
@@ -891,9 +891,7 @@ class MouseAndSpeech:
         self.m_ver_div = self.ver_div.get()
 
         self.m_pyautogui = pyautogui
-        self.engine = pyttsx3.init()
-        self.engine.connect('started-utterance', self.onStart)
-        self.engine.connect('finished-utterance', self.onEnd)
+        self.engine = wincl.Dispatch("SAPI.SpVoice")
 
         self.max_samples = self.controller.samples
         self.n_samples = 0
@@ -947,14 +945,6 @@ class MouseAndSpeech:
                     self.direction_samples[data['Direction']] += 1
                     self.click_samples[data['Clicks']] += 1
 
-                    # self.mouse = data['Mouse']
-                    # center, w, h = self.mouse[1]
-                    # x, y = self.lerp((center[0] / w, center[1] / h))
-                    #
-                    # self.m_pyautogui.moveTo(x=x * self.w*1.1,
-                    #                         y=y * self.h*1.1, duration=0)
-                    # print('x: {:.2} y: {:.2}'.format(x, y))
-
                 else:
                     self.n_samples = 0
                     click = self.click_samples.index(max(self.click_samples))
@@ -977,8 +967,8 @@ class MouseAndSpeech:
                         clear_queue(self.q)
                     self.reset()
 
-                    if self.m_talk:
-                        self.engine.runAndWait()
+                    # if self.m_talk:
+                    #     self.engine.runAndWait()
 
             # clear_queue(self.q)
 
@@ -1004,8 +994,8 @@ class MouseAndSpeech:
                     self.m_pyautogui.click(button='right', duration=self.b_duration)
 
     def handle_movement(self, direction):
-        if self.controller.current_frame is self.controller.frames[
-            Applications] and not self.controller.mouse_control.get():
+        if self.controller.current_frame is self.controller.frames[Applications] \
+                and not self.controller.mouse_control.get():
             w = self.controller.focus_get()
 
             if direction in [0, 1, 3, 6]:
@@ -1023,37 +1013,32 @@ class MouseAndSpeech:
             direction = click
             self.result_direction = direction
             if self.result_direction != 4:
-                if self.m_talk: self.engine.say(str(self.directions[direction]))
+                if self.m_talk:
+                    self.isTalking = True
+                    self.engine.Speak(str(self.directions[direction]))
+                    self.isTalking = False
+
         else:
             if self.result_click == 4 and click == 2 or self.result_click == 2 and click == 4:
                 return
+
             self.result_click = click
             if self.result_click != 3:
+                self.isTalking = True
+
                 if click == 4:
-                    self.engine.say('Double Click')
+                    self.engine.Speak('Double Click')
                 elif click == 2:
-                    self.engine.say('Left Click')
+                    self.engine.Speak('Left Click')
                 elif click == 1:
-                    self.engine.say('Right Click')
+                    self.engine.Speak('Right Click')
+
+                self.isTalking = False
 
     def reset(self):
         self.n_samples = 0
         self.click_samples = [0] * 4
         self.direction_samples = [0] * 9
-
-    def onStart(self, name):
-        self.isTalking = True
-
-    def onEnd(self, name, completed):
-        self.isTalking = False
-
-    def lerp(self, center, per=0.5):
-        x, y = center
-        x = self.x + (x - self.x) * per
-        y = self.y + (y - self.y) * per
-        self.x = x
-        self.y = y
-        return x, y
 
     def __del__(self):
         print(self.__title__)
