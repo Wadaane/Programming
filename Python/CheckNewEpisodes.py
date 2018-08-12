@@ -12,7 +12,7 @@ paths = [
 web_url = 'https://www.couchtuner.rocks/tv-shows/'
 web_url2 = 'http://www.couch-tuner.la/tv-lists/'
 downloaded_list = []
-series = []
+series_available = []
 urls = []
 links = []
 titles_paths = []
@@ -101,10 +101,10 @@ def get_series_urls():
         url = _a.get('href')
 
         for title_path in titles_paths:
-            if text.upper().strip() == title_path[0].upper().strip() and [text, url] not in series:
-                series.append([text, url])
+            if text.upper().strip() == title_path[0].upper().strip() and [text, url] not in series_available:
+                series_available.append([text, url])
 
-    if len(series) < 1:
+    if len(series_available) < 1:
         print('\tNo new Releases.')
     return True
 
@@ -114,7 +114,7 @@ def get_episodes_urls():
     Get the URLs for not downloaded episodes.
     """
     length = 0
-    for serie in series:
+    for serie in series_available:
         req = requests.get(serie[1])
         soup = BeautifulSoup(req.text, 'html.parser')
         _as = soup.find_all('a')
@@ -210,10 +210,12 @@ def main():
     get_downloaded_list()
 
     print('\tGet new releases list from website ...')
+    
     if get_series_urls():
         print('\tCheck if there are new episodes to download ...')
         get_episodes_urls()
         launch_browser()
+
     input('\tPress Enter to exit.')
 
 

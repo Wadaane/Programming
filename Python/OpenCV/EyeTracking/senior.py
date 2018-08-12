@@ -541,10 +541,6 @@ class EyeTracker:
         left_open = 0
         right_open = 0
 
-        # br_level = int(cv2.mean(roi_gray)[0])
-        # if br_level < 128:
-        #     cv2.equalizeHist(roi_gray, roi_gray)
-
         eyes = self.eyeCascade.detectMultiScale(roi_gray,
                                                 scaleFactor=1.1,
                                                 minNeighbors=5,
@@ -570,17 +566,19 @@ class EyeTracker:
         self.clicks = left_open + right_open
 
     def detect_eye_move(self, src):
-        middle = src.shape[1] // 2
+        middle = src.shape[1] // 2  # Assume the middle is half of image width
         for center in self.center_eye:
             (x, y), w, h = center
             img = src[y - h // 2:y + h // 2,
-                      x - w // 2:x + w // 2]
+                      x - w // 2:x + w // 2]  # Only select the eye part of the image.
 
             (f_x, f_y), f_w, f_h = self.center_face
-            if f_x - f_w < x < f_x + f_w:
+
+            if f_x - f_w//2 < x < f_x + f_w//2:  # Reassign middle to x coordinate of the center of the face.
                 middle = f_x
+
             left_eye = x < middle
-            self.get_pupil(img, left_eye)
+            self.get_iris(img, left_eye)
 
         img = self.hcat([self.eye_imgs[0], self.eye_imgs[1]], self.window_size)
         self.eye_imgs[0].clear()
@@ -588,16 +586,16 @@ class EyeTracker:
 
         self.eyes_frame = img
 
-    def get_pupil(self, src, left):
+    def get_iris(self, src, left):
         h, w = src.shape
 
         # Shift image according to the offset saved when calibrating.
         self.centralize_eye(src, left)
 
         # If image too dark, improve Contrast.
-        br_level = int(cv2.mean(src)[0])
-        if br_level < 128:
-            cv2.equalizeHist(src, src)
+        # br_level = int(cv2.mean(src)[0])
+        # if br_level < 128:
+        #     cv2.equalizeHist(src, src)
 
         side = 0 if left else 1
         if len(self.eye_imgs[side]) == 0:
@@ -606,20 +604,20 @@ class EyeTracker:
             # Crop Image, to avoid eyebrows and corner of the eye.
             self.limit_bounds(img_mapped_black, h, w)
 
-            # Get Threshold and turn image into binary, Black and White.
+            # Get Threshold and turn image into Black and White.
             thresh = np.min(img_mapped_black) + 0.1 * np.mean(img_mapped_black)
             img_mapped_black = cv2.threshold(img_mapped_black, int(thresh), 255, cv2.THRESH_BINARY)[1]
 
             # Draw a Circle at the center of the original image (For Debug)
             center = self.get_draw_center(img_mapped_black, src, color=255)
 
-            # Attempt to control mouse directly 'Go where i Look'.
+            # Attempt to control mouse directly 'Go where i Look'. (didn't work)
             self.mouse[side] = center, self.center_eye[side][1], self.center_eye[side][2]
 
             # Resize image into 3x3.
             img_mapped_direction = cv2.resize(img_mapped_black, (3, 3), interpolation=cv2.INTER_AREA)
 
-            # Get Threshold and turn image into binary, Black and White.
+            # Get Threshold and turn image into Black and White.
             thresh = np.min(img_mapped_direction)
             img_mapped_direction = cv2.threshold(img_mapped_direction, thresh, 255, cv2.THRESH_BINARY)[1]
 
@@ -627,6 +625,7 @@ class EyeTracker:
             if self.clicks + side == 2:
                 img_mapped_direction[:, :] = 255
                 img_mapped_direction[1, 1] = 0
+
             # Both Eyes Closed, signal for Down.
             elif self.clicks == 0:
                 img_mapped_direction[:, :] = 255
@@ -644,7 +643,7 @@ class EyeTracker:
             self.eye_imgs[side].append(img_mapped_black)
             self.eye_imgs[side].append(img_mapped_direction)
 
-            # When calibrating calculate how far the retina is from the center of the image.
+            # When calibrating calculate how far the iris is from the center of the image.
             if self.set_center:
                 offset = center[0] - w // 2
                 if left:
@@ -652,6 +651,7 @@ class EyeTracker:
                 else:
                     self.offset_right = offset
 
+    # Method not used in final version
     def divide_image(self, img, div, return_image=False):
         h = img.shape[0]
         w = img.shape[1]
@@ -783,17 +783,14 @@ class EyeTracker:
             y_list = []
             for y in range(src.shape[0]):
                 for x in range(src.shape[1]):
-                    if src[y, x] == 0:  # and (src.shape[0]*0.3 < y < src.shape[0]*0.7 or
-                        # src.shape[1]*0.3 < x < src.shape[1]*0.7):
+                    if src[y, x] == 0:
                         x_list.append(x)
                         y_list.append(y)
 
             if len(x_list) > 0:
                 center = (min(x_list) + (max(x_list) - min(x_list)) // 2,
                           min(y_list) + (max(y_list) - min(y_list)) // 2)
-
                 cv2.circle(dst, center, radius, color, thickness=-1)
-                # print('Except', center)
                 return center
 
     @staticmethod
