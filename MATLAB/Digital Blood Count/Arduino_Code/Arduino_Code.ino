@@ -15,6 +15,7 @@ int speedDelay = 500;  // The delay will set the speed of the movements.
 int microstepDivider = 16;  // 1/16th step
 
 int stepPin = 0, dirPin = 0;
+boolean start = false;
 
 void setup() {
   Serial.begin(9600);
@@ -36,8 +37,14 @@ void setup() {
 void loop() {
   while (Serial.available()) {
     String cmd = Serial.readStringUntil('#');  // Read given Axis and Steps in Serial.
-    rotate_steps(cmd); 
-    delay(speedDelay*2); // simple delay but not necessary.
+
+    if(start){        
+        rotate_steps(cmd); 
+        delay(speedDelay*2); // simple delay but not necessary.
+    } else if(cmd == "start") {
+        start != start;
+    }
+  }
 }
 
 void rotate_steps(String cmd) {
