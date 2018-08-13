@@ -27,6 +27,8 @@ multiplierAreaCounter = 0.86;
 multiplierDeletedCircle = 2;  % 1.45;
 radiusDilation = 0;  % Minimum distance betwen pixels to be considered from same group (blob). defalut: 4
 radiusErosion = 0;
+grayLevels = 4;
+holeFilling = false;
 
 figure('Name', 'Digital CBC','NumberTitle','off');  % Don't know the name.
 r1 = 2;
@@ -37,7 +39,7 @@ p1 = addPlot(src, 'Original', r1, c1, p1);
 imageGrayScale = rgb2gray(src);  % Convert to grayscale
 p1 = addPlot(imageGrayScale, 'Grayscale', r1, c1, p1);
 
-imageGrayScale = histEqDiv(imageGrayScale, 1, 1, 3); % histEqDiv(image, vertical division, horizontal division, gray levels 3) 
+imageGrayScale = histEqDiv(imageGrayScale, 1, 1, grayLevels); % histEqDiv(image, vertical division, horizontal division, gray levels 3) 
 p1 = addPlot(imageGrayScale, 'Histogram Equalization', r1, c1, p1);
 
 thresh = int8(multiplierBrightness*mean2(imageGrayScale));  % Get average brightness and set threshold
@@ -48,9 +50,11 @@ imageBinarySrc = bwdist(~imageBinarySrc) <= radiusDilation;
 imageBinarySrc = 255 * ~imageBinarySrc;
 p1 = addPlot(imageBinarySrc, ['Dilation: ', num2str(radiusDilation)], r1, c1, p1);
 
-% i = imfill(~imageBinarySrc,'holes');
-% imageBinarySrc = ~i;
-% p1 = addPlot(imageBinarySrc, 'Holes Filling', r1, c1, p1);
+if holeFilling
+    i = imfill(~imageBinarySrc,'holes');
+    imageBinarySrc = ~i;
+    p1 = addPlot(imageBinarySrc, 'Holes Filling', r1, c1, p1);
+end
 
 se = strel('disk', radiusErosion);
 im = imerode(~imageBinarySrc, se);
