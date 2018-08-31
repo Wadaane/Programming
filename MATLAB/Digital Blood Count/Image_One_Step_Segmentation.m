@@ -1,10 +1,11 @@
 clear 
-% clc
+clc
 tic
 
 % Acquire image
 src = imread('Images/Latest.jpg');  % I put all images in the subfolder Images.
 % src = imresize(src, [480 NaN]);  % Resize for fast operation.
+src_original = src;
 
 red = src(:,:,1); % Red channel
 green = src(:,:,2); % Green channel
@@ -28,38 +29,38 @@ multiplierDeletedCircle = 2;  % 1.45;
 radiusDilation = 0;  % Minimum distance betwen pixels to be considered from same group (blob). defalut: 4
 radiusErosion = 0;
 grayLevels = 4;
-holeFilling = false;
+holeFilling = true;
 
-figure('Name', 'Digital CBC','NumberTitle','off');  % Don't know the name.
-r1 = 2;
-c1 = 4;
-p1 = 1;
-p1 = addPlot(src, 'Original', r1, c1, p1);
+% figure('Name', 'Digital CBC','NumberTitle','off');  % Don't know the name.
+% r1 = 2;
+% c1 = 4;
+% p1 = 1;
+% p1 = addPlot(src, 'Original', r1, c1, p1);
 
 imageGrayScale = rgb2gray(src);  % Convert to grayscale
-p1 = addPlot(imageGrayScale, 'Grayscale', r1, c1, p1);
+% p1 = addPlot(imageGrayScale, 'Grayscale', r1, c1, p1);
 
 imageGrayScale = histEqDiv(imageGrayScale, 1, 1, grayLevels); % histEqDiv(image, vertical division, horizontal division, gray levels 3) 
-p1 = addPlot(imageGrayScale, 'Histogram Equalization', r1, c1, p1);
+% p1 = addPlot(imageGrayScale, 'Histogram Equalization', r1, c1, p1);
 
 thresh = int8(multiplierBrightness*mean2(imageGrayScale));  % Get average brightness and set threshold
 imageBinarySrc = imageGrayScale > thresh;  % Turn image to binary, set 0 each pixel with brightness less than thresh, 1 otherwise.
-p1 =addPlot(imageBinarySrc, ['Thresholding: ', num2str(thresh)], r1, c1, p1);
+% p1 =addPlot(imageBinarySrc, ['Thresholding: ', num2str(thresh)], r1, c1, p1);
 
 imageBinarySrc = bwdist(~imageBinarySrc) <= radiusDilation;
 imageBinarySrc = 255 * ~imageBinarySrc;
-p1 = addPlot(imageBinarySrc, ['Dilation: ', num2str(radiusDilation)], r1, c1, p1);
+% p1 = addPlot(imageBinarySrc, ['Dilation: ', num2str(radiusDilation)], r1, c1, p1);
 
 if holeFilling
     i = imfill(~imageBinarySrc,'holes');
     imageBinarySrc = ~i;
-    p1 = addPlot(imageBinarySrc, 'Holes Filling', r1, c1, p1);
+%     p1 = addPlot(imageBinarySrc, 'Holes Filling', r1, c1, p1);
 end
 
 se = strel('disk', radiusErosion);
 im = imerode(~imageBinarySrc, se);
 imageBinarySrc = ~im;
-p1 = addPlot(imageBinarySrc, ['Erosion: ', num2str(radiusErosion)], r1, c1, p1);
+% p1 = addPlot(imageBinarySrc, ['Erosion: ', num2str(radiusErosion)], r1, c1, p1);
 
 % Detect and count WBC
 imageBinary = imageBinarySrc == 0;
@@ -90,13 +91,17 @@ radiusMinor = int8(radiusMinor/2);
 countArea = sum(area)/(mean(area) * multiplierAreaCounter);
 countArea = floor(countArea);
 msg = compose(['Connected', '\n', ' Componnents: ', num2str(count), '/', num2str(countArea)]);
-p1 = addPlot(imageColoredBlobs, msg, r1, c1, p1);
+% p1 = addPlot(imageColoredBlobs, msg, r1, c1, p1);
 % imwrite(imageColoredBlobs,['Images/Results/', '0.png'],'png');
 
 % Remove all counted Elements from image for next iteration.
 tmp = zeros(size(imageBinary));
 
 % Segmentated elements are saved one by one, to be analyzed in a later step.
+count_RBC = 0;
+count_WBC = 0;
+count_Platelets = 0;
+
 for j = 1 : str2double(count)
     xy = int16(centroids(j,:));
     x = xy(1);
@@ -105,49 +110,93 @@ for j = 1 : str2double(count)
     h = hw(1);
     w = hw(2);
     
-    radius = diameters(j)/2;
-    b = int8(radius);  % Used as Maximum radius in imfindcircles
-    a = max(int8(b * 0.01), 1);  % Used as Minimum radius in imfindcircles
-    
-    radius = multiplierDeletedCircle*radius;
+    diameter = diameters(j);
+    radius = multiplierDeletedCircle * diameter/2;
     maskCentroid = zeros(size(imageBinary));
     maskCentroid(y, x) = 1;    
     tmp = tmp + (bwdist(maskCentroid) <= radius);
-    eleColored = imageColoredBlobs( max(y - radius, 1): min(y + radius, h), max(x - radius, 1): min(x + radius, w), :);
+    eleColored = src_original( max(y - radius, 1): min(y + radius, h), max(x - radius, 1): min(x + radius, w), :);
     eleBinary1 = blobMap == j ;
     eleBinary = eleBinary1( max(y - radius, 1): min(y + radius, h), max(x - radius, 1): min(x + radius, w));
     ele = uint8(eleBinary) .* eleColored;
     
-%     if radius < 60
-%         imwrite(ele,['Images/Results/Platelets_', num2str(j),'.png'],'png');
-%     elseif  radius > 115
-%         imwrite(ele,['Images/Results/WBC_', num2str(j),'.png'],'png');
-%     else
-%         imwrite(ele,['Images/Results/RBC_', num2str(j),'.png'],'png');
-%     end
-%     
-%     eleGrayScale = rgb2gray(ele);  % Convert to grayscale
-%     [centers, radii] = imfindcircles(eleGrayScale, [a b]);
-%     centerSize = size(centers);
-%     if centerSize(1) > 1
-%         figure('Name', ['WBC and Compounds: ', num2str(radius)],'NumberTitle','off');
-%         imshow(ele)
-%         viscircles(centers, radii, 'EdgeColor', 'b');
-%         viscircles(centers, radii);
-%     end  
-      
-%     imwrite(ele,['Images/Results/', num2str(j),'.png'],'png');
+    if diameter < 30    
+        count_Platelets = count_Platelets + 1;
+%         imwrite(ele,['Images/Results/Platelets_', num2str(diameter), '_', num2str(j), '.png'],'png');
+    
+    elseif diameter < 120
+        count_RBC = count_RBC + 1;
+%         imwrite(ele,['Images/Results/RBC_', num2str(diameter), '_', num2str(j), '.png'],'png');    
+        
+    elseif  diameter >= 120 && diameter < 150
+        elem = ele;
+        M = repmat(all(~ele, 3), [1 1 3]);
+        elem(M) = 255;
+
+        elem = rgb2gray(elem);
+        thr = mean2(elem);
+        elem = elem > 0.2*thr;
+
+        wbc = mean2(elem);
+        
+        if wbc == 1
+            eleGrayScale = rgb2gray(ele);  % Convert to grayscale
+            [centers, radii] = imfindcircles(ele, [25 60], 'Sensitivity', 0.97);
+            s = size(centers);            
+            
+%             if s(1) > 1
+%                 figure('Name', ['RBC_Bounded_: ', num2str(s(1))],'NumberTitle','off');
+%                 imshow(ele)
+%                 viscircles(centers, radii, 'EdgeColor', 'b');
+%             end
+
+            count_RBC = count_RBC + s(1);
+%             imwrite(ele,['Images/Results/RBC_Bounded_', num2str(s(1)), '_', num2str(j), '.png'],'png');
+        else
+            count_WBC = count_WBC + 1;
+%             imwrite(ele,['Images/Results/WBC_', num2str(wbc), '_', num2str(j), '.png'],'png');
+            
+        end
+    else    
+        
+        eleGrayScale = rgb2gray(ele);  % Convert to grayscale
+        [centers, radii] = imfindcircles(ele, [25 60], 'Sensitivity', 0.97);
+        s = size(centers);
+        
+%         if s(1) > 1
+%             figure('Name', ['RBC_Bounded_: ', num2str(s(1))],'NumberTitle','off');
+%             imshow(ele)
+%             viscircles(centers, radii, 'EdgeColor', 'b');
+%         end
+        
+        count_RBC = count_RBC + s(1);
+%         imwrite(ele,['Images/Results/RBC_Bounded_', num2str(s(1)), '_', num2str(j), '.png'],'png');
+    end
 end
 
 imageBinary = uint8(~tmp);
 mask = cat(3, imageBinary, imageBinary, imageBinary);  % Create mask in an RGB format.
-imageWithoutWBC = src .* mask;  % multiplying element by element so the blobs are removed in each channel
+imageWithoutWBC = src_original .* mask;  % multiplying element by element so the blobs are removed in each channel
 M = repmat(all(~imageWithoutWBC, 3), [1 1 3]);  % Turn all pure black pixel into white.
 imageWithoutWBC(M) = 255;
 
-figure('Name', 'Colored Blobs','NumberTitle','off');
-imshow(imageColoredBlobs);
+% figure('Name', 'Elements Removed','NumberTitle','off');
+% imshow(imageWithoutWBC);
 
+% figure('Name', 'Colored Blobs','NumberTitle','off');
+% imshow(imageColoredBlobs);
+% 
+% figure('Name', 'Src Filtered','NumberTitle','off');
+% imshow(src);
+
+disp(['RBC: ', num2str(count_RBC)]);
+disp(['WBC: ', num2str(count_WBC)]);
+disp(['Platelets: ', num2str(count_Platelets)]);
+
+% figure
+% d = hist(diameters.', unique(diameters(:)));
+% plot(d)
+% histogram(diameters)
 toc
 
 

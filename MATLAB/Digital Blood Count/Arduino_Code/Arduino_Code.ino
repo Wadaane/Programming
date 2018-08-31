@@ -1,12 +1,12 @@
-#define stepPinX 5
-#define dirPinX 3
-#define stepPinY 5
-#define dirPinY 3
+#define stepPinX 7
+#define dirPinX 30
+#define stepPinY 6
+#define dirPinY 31
 #define stepPinZ 5
-#define dirPinZ 3
-#define MS1 7
-#define MS2 8
-#define MS3 9
+#define dirPinZ 53
+#define MS1 52
+#define MS2 51
+#define MS3 50
     // MS1, MS2 and MS3 are used to set the microsteps.
     // stepPinX is for the step pulse
     // dirPinX is for the direction of rotation
@@ -16,6 +16,7 @@ int microstepDivider = 16;  // 1/16th step
 
 int stepPin = 0, dirPin = 0;
 boolean start = false;
+
 
 void setup() {
   Serial.begin(9600);
@@ -34,6 +35,7 @@ void setup() {
   setMicrostepping(microstepDivider);
 }
 
+
 void loop() {
   while (Serial.available()) {
     String cmd = Serial.readStringUntil('#');  // Read given Axis and Steps in Serial.
@@ -46,6 +48,7 @@ void loop() {
     }
   }
 }
+
 
 void rotate_steps(String cmd) {
   char axis = cmd.charAt(0);
@@ -80,6 +83,7 @@ void rotate_steps(String cmd) {
     delayMicroseconds(speedDelay);
   }
 }
+
 
 void setMicrostepping(int divider) {
   switch (divider) {
