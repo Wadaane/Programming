@@ -7,22 +7,29 @@ tic
 
 % Acquire image
 src = imread('Images/Latest.jpg');  % I put all images in the subfolder Images.
-% src = imresize(src, [480 NaN]);  % Resize for fast operation.
+% RBC: 292
+% WBC: 2
+% Platelets: 7
 src_original = src;
-src(:,:,1) = zeros(size(src, 1), size(src, 2));
 
-multiplierBrightness = 0.3;  % multiplier for the brightness threshold. default: 0.3
-multiplierArea = 0.1; %.9;  % multiplier for the area threshold.
+src(:,:,1) = 0.1 .* src(:,:,1);
+src(:,:,2) = 1.5 .* src(:,:,2);
+src(:,:,3) = 0.1 .* src(:,:,3);
+
+multiplierBrightness = 0.3;  % 0.3 multiplier for the brightness threshold.
+multiplierArea = 0.01; % 0.1 multiplier for the area threshold.
 multiplierAreaCounter = 0.86;
 multiplierDeletedCircle = 2;  % 1.45;
-radiusDilation = 0;  % Minimum distance betwen pixels to be considered from same group (blob). defalut: 4
+radiusDilation = 3;  % Minimum distance betwen pixels to be considered from same group (blob). defalut: 4
 radiusErosion = 0;
 grayLevels = 4;
-dilation = false;
+
+dilation = true;
 erosion = false;
 holeFilling = true;
 saveComponents = true;
 drawAll = false;
+drawBounded = false;
 
 imageGrayScale = rgb2gray(src);  % Convert to grayscale
 imageGrayScaleEnhanced = histEqDiv(imageGrayScale, 1, 1, grayLevels); % histEqDiv(image, vertical division, horizontal division, gray levels 3) 
@@ -56,7 +63,7 @@ blobMap = labelmatrix(CC);  % give an index to each blob.
 s = regionprops(blobMap, 'Area', 'Centroid', 'MajorAxisLength');  % Get the properties of all blobs.
 threshArea = mean([s.Area]) * multiplierArea;  % Calculate area threshold.
 threshArea = double(int32(threshArea));  % convert to proper type because matlab is being a baby about it.
-
+% imageBinaryDebug = imageBinary;
 imageBinary = bwareaopen(imageBinary, threshArea);  % Remove blobs that are smaller than threshArea
 
 CC = bwconncomp(imageBinary);  % get blobs again now that we removed the smaller ones.
@@ -97,9 +104,6 @@ for j = 1 : str2double(count)
     
     diameter = diameters(j);
     radius = multiplierDeletedCircle * diameter/2;
-    maskCentroid = zeros(size(imageBinary));
-    maskCentroid(y, x) = 1;    
-    tmp = tmp + (bwdist(maskCentroid) <= radius);
     eleColored = src_original( max(y - radius, 1): min(y + radius, h), max(x - radius, 1): min(x + radius, w), :);
     eleBinary1 = blobMap == j ;
     eleBinary = eleBinary1( max(y - radius, 1): min(y + radius, h), max(x - radius, 1): min(x + radius, w));
@@ -129,11 +133,11 @@ for j = 1 : str2double(count)
             [centers, radii] = imfindcircles(ele, [25 60], 'Sensitivity', 0.97);
             s = size(centers);            
             
-%             if s(1) > 1
-%                 figure('Name', ['RBC_Bounded_: ', num2str(s(1))],'NumberTitle','off');
-%                 imshow(ele)
-%                 viscircles(centers, radii, 'EdgeColor', 'b');
-%             end
+            if s(1) > 1 && drawBounded
+                figure('Name', ['RBC_Bounded_: ', num2str(s(1))],'NumberTitle','off');
+                imshow(ele)
+                viscircles(centers, radii, 'EdgeColor', 'b');
+            end
 
             count_RBC = count_RBC + s(1);
             msg = ['Images/Results/RBC_Bounded_', num2str(count_RBC), '_', num2str(s(1)), '.png'];
@@ -149,6 +153,12 @@ for j = 1 : str2double(count)
         [centers, radii] = imfindcircles(ele, [25 60], 'Sensitivity', 0.97);
         s = size(centers);
         
+        if s(1) > 1  && drawBounded
+                figure('Name', ['RBC_Bounded_: ', num2str(s(1))],'NumberTitle','off');
+                imshow(ele)
+                viscircles(centers, radii, 'EdgeColor', 'b');
+        end
+        
         count_RBC = count_RBC + s(1);
         msg = ['Images/Results/RBC_Bounded_', num2str(count_RBC), '_', num2str(s(1)), '.png'];
     end
@@ -158,11 +168,27 @@ for j = 1 : str2double(count)
     end
 end
 
-imageBinary = uint8(~tmp);
-mask = cat(3, imageBinary, imageBinary, imageBinary);  % Create mask in an RGB format.
-imageWithoutElements = src_original .* mask;  % multiplying element by element so the blobs are removed in each channel
-M = repmat(all(~imageWithoutElements, 3), [1 1 3]);  % Turn all pure black pixel into white.
-imageWithoutElements(M) = 255;
+mask2 = rgb2gray(imageColoredBlobs);
+mask2 = mask2 == 0;
+mask2 = uint8(mask2);
+red = src_original(:, :, 1);
+green = src_original(:, :, 2);
+blue = src_original(:, :, 3);
+
+imageWithoutElements = cat(3, red .* mask2, green .* mask2, blue .* mask2);
+
+% mask2 = mask2 == 0;
+% mask2 = uint8(mask2);
+% mask2 = 255.*mask2;
+% blank = zeros(size(mask2));
+% mask2 = cat(3, blank, blank, mask2);
+% imageWithoutElements = imageWithoutElements + mask2;
+
+if saveComponents
+        imwrite(imageColoredBlobs, 'Images/Counted_elements.png', 'png');
+        imwrite(imageWithoutElements, 'Images/Uncounted_elements.png', 'png');
+%         imwrite(imageBinaryDebug, 'Images/imageBinaryDebug.png', 'png');
+end
 
 if drawAll
     figure('Name', 'Digital CBC','NumberTitle','off');  % Don't know the name.

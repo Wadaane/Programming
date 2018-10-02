@@ -38,11 +38,27 @@ void loop() {
 
     if (cmd == "start") {
       start = !start;
-      digitalWrite(LED_BUILTIN, !digitalRead(LED_BUILTIN));
-    } else if (start) {
-      rotate_steps(cmd);
-      delay(speedDelay * 2); // simple delay but not necessary.
-    }
+      digitalWrite(LED_BUILTIN, HIGH);
+
+      for(int y = 0; y <= 60; y += 20){
+        rotate_steps('y' + String(y));
+        for(int x = 0; x <= 20; x += 5){
+          rotate_steps('x' + String(x));
+          delay(500);
+        }
+        
+        rotate_steps('y' + String(y + 10));
+        for(int x = 20; x >= 0; x -= 5){
+          rotate_steps('x' + String(x));
+          delay(500);
+        }
+      }
+      
+      digitalWrite(LED_BUILTIN, LOW);
+    }// else if (start) {
+//      rotate_steps(cmd);
+//      delay(speedDelay * 2); // simple delay but not necessary.
+//    }
   }
 }
 
@@ -103,15 +119,15 @@ void rotate_steps(String cmd) {
 
   Serial.println(msg);
   
-  if (axis == 'y') {
-    digitalWrite(dirPinX, dir);
-    for (int i = 0; i < steps; i++) {
-      digitalWrite(stepPinX, HIGH);
-      delayMicroseconds(speedDelay);
-      digitalWrite(stepPinX, LOW);
-      delayMicroseconds(speedDelay);
-    }
-    
-  }
+//  if (axis == 'y') {
+//    digitalWrite(dirPinX, dir);
+//    for (int i = 0; i < steps; i++) {
+//      digitalWrite(stepPinX, HIGH);
+//      delayMicroseconds(speedDelay);
+//      digitalWrite(stepPinX, LOW);
+//      delayMicroseconds(speedDelay);
+//    }
+//    
+//  }
 }
 
