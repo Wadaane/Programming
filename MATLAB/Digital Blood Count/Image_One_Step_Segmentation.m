@@ -7,9 +7,9 @@ tic
 
 % Acquire image
 src = imread('Images/Latest.jpg');  % I put all images in the subfolder Images.
-% RBC: 292
+% RBC: 304
 % WBC: 2
-% Platelets: 7
+% Platelets: 35
 src_original = src;
 
 src(:,:,1) = 0.1 .* src(:,:,1);
@@ -130,8 +130,25 @@ for j = 1 : str2double(count)
         
         if wbc == 1
             eleGrayScale = rgb2gray(ele);  % Convert to grayscale
-            [centers, radii] = imfindcircles(ele, [25 60], 'Sensitivity', 0.97);
-            s = size(centers);            
+            [centers, radii] = imfindcircles(ele, [38 53], 'Sensitivity', 0.9912);
+            s = size(centers);
+            
+            valide = s(1);
+            removed = zeros(1, s(1));
+            for y1 = 1 : s(1) - 1
+                if removed(y1) == 0
+                    for y2 = y1+1 : s(1)
+                        distance = sqrt((centers(y1,1) - centers(y2,1))^2 + (centers(y1,2) - centers(y2,2))^2);
+
+                        if 0.9 * radii(y1) > distance && 0.9 * radii(y2) > distance
+                            valide = valide - 1;
+                            removed(y2) = 1;
+                        end
+                    end
+                end
+            end
+            
+            s(1) = valide;
             
             if s(1) > 1 && drawBounded
                 figure('Name', ['RBC_Bounded_: ', num2str(s(1))],'NumberTitle','off');
@@ -150,8 +167,25 @@ for j = 1 : str2double(count)
     else    
         
         eleGrayScale = rgb2gray(ele);  % Convert to grayscale
-        [centers, radii] = imfindcircles(ele, [25 60], 'Sensitivity', 0.97);
+        [centers, radii] = imfindcircles(ele, [38 53], 'Sensitivity', 0.9912);
         s = size(centers);
+        
+        valide = s(1);
+        removed = zeros(1, s(1));
+        for y1 = 1 : s(1) - 1
+            if removed(y1) == 0
+                for y2 = y1+1 : s(1)
+                    distance = sqrt((centers(y1,1) - centers(y2,1))^2 + (centers(y1,2) - centers(y2,2))^2);
+
+                    if 0.9 * radii(y1) > distance && 0.9 * radii(y2) > distance
+                        valide = valide - 1;
+                        removed(y2) = 1;
+                    end
+                end
+            end
+        end
+        
+        s(1) = valide;
         
         if s(1) > 1  && drawBounded
                 figure('Name', ['RBC_Bounded_: ', num2str(s(1))],'NumberTitle','off');
