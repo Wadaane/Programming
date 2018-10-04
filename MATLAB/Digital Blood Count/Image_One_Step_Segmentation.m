@@ -113,11 +113,11 @@ for j = 1 : str2double(count)
         count_Platelets = count_Platelets + 1;
         msg = ['Images/Results/Platelets_', num2str(count_Platelets), '_', num2str(diameter), '.png'];
     
-    elseif diameter < 120
+    elseif diameter < 100
         count_RBC = count_RBC + 1;
         msg = ['Images/Results/RBC_', num2str(count_RBC), '_', num2str(diameter), '.png'];    
         
-    elseif  diameter >= 120 && diameter < 150
+    elseif  diameter >= 100 && diameter < 165
         elem = ele;
         M = repmat(all(~ele, 3), [1 1 3]);
         elem(M) = 255;
@@ -126,9 +126,9 @@ for j = 1 : str2double(count)
         thr = mean2(elem);
         elem = elem > 0.2*thr;
 
-        wbc = mean2(elem);
+        rbc = mean2(elem);
         
-        if wbc == 1
+        if rbc >= 0.990
             eleGrayScale = rgb2gray(ele);  % Convert to grayscale
             [centers, radii] = imfindcircles(ele, [38 53], 'Sensitivity', 0.9912);
             s = size(centers);
@@ -157,7 +157,7 @@ for j = 1 : str2double(count)
             end
 
             count_RBC = count_RBC + s(1);
-            msg = ['Images/Results/RBC_Bounded_', num2str(count_RBC), '_', num2str(s(1)), '.png'];
+            msg = ['Images/Results/RBC_Bounded_', num2str(count_RBC), '_', num2str(diameter), '_', num2str(s(1)), '.png'];
         else
             count_WBC = count_WBC + 1;
             msg = ['Images/Results/WBC_', num2str(count_WBC), '_', num2str(diameter), '.png'];
@@ -194,7 +194,7 @@ for j = 1 : str2double(count)
         end
         
         count_RBC = count_RBC + s(1);
-        msg = ['Images/Results/RBC_Bounded_', num2str(count_RBC), '_', num2str(s(1)), '.png'];
+        msg = ['Images/Results/RBC_Bounded_', num2str(count_RBC), '_', num2str(diameter), '_',num2str(s(1)), '.png'];
     end
     
     if saveComponents
@@ -264,6 +264,36 @@ disp(['Platelets: ', num2str(count_Platelets)]);
 
 toc
 
+function s = openSerial() %#ok<DEFNU>
+    ports = seriallist;
+
+    if isempty(ports)
+        disp('No Arduino Connected');
+        return
+    end
+
+    comPort = ports(1);
+    s = serial(comPort);
+    set(s,'DataBits',8);
+    set(s,'StopBits',1);
+    set(s,'BaudRate',9600);
+    set(s,'Parity','none');
+    fopen(s);
+end
+
+function send(s, msg)%#ok<DEFNU>
+    fprintf(s, [msg, '#']);
+end
+
+function msg = read(s)%#ok<DEFNU>
+    msg = fscanf(s);
+end
+
+function closeSerial(s)%#ok<DEFNU>
+    fclose(s);
+    delete(s);
+    clear s
+end
 
 function src = histEqDiv(src, dw, dh, g)
     hw = size(src);
