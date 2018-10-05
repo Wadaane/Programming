@@ -8,17 +8,12 @@
 #define MS2 51
 #define MS3 52
 
-
-// stepPinX is for the step pulse
-// dirPinX is for the direction of rotation
-
 int speedDelay = 500;  // The delay will set the speed of the movements.
 int microstepDivider = 4;  // 1/16th step
 
 int stepPin = 0, dirPin = 0, jumps = 500,
     position_currentX = 0, position_currentY = 0, position_currentZ = 0;
 boolean start = false;
-
 
 void setup() {
   Serial.begin(9600);
@@ -35,41 +30,39 @@ void setup() {
 
   setMicrostepping(microstepDivider);
 
-
   pinMode(LED_BUILTIN, OUTPUT);
   digitalWrite(LED_BUILTIN, start);
 
 }
 
-
 void loop() {
   while (Serial.available()) {
     String cmd = Serial.readStringUntil('#');  // Read given Axis and Steps in Serial.
-
+    
     if (cmd == "start") {
       start = !start;
       digitalWrite(LED_BUILTIN, start);
       
-    } else if (cmd == "demo"){
-      demo();
+    } else if (cmd == "run"){
+      run();
     } else if (start) {
-      rotate_steps(cmd);
-      delay(speedDelay * 2); // simple delay but not necessary.
+      rotate_steps(0, cmd);
     }
   }
 }
 
-void rotate_steps(String cmd) {
+int rotate_steps(int pos, String cmd) {
   char axis = cmd.charAt(0);
   int steps = cmd.substring(1).toInt();
   int current = 0;
   String msg = "";
+  boolean _next = false;
 
   // Select the right pins for the given axis.
   switch (axis) {
     case 's':      
       setMicrostepping(steps);
-      return;
+      return -1;
       
     case 'x':
       dirPin = dirPinX;
@@ -103,7 +96,7 @@ void rotate_steps(String cmd) {
       break;
 
     default:
-      return;
+      return -1;
   }
 
   int next = steps * jumps;
@@ -120,7 +113,19 @@ void rotate_steps(String cmd) {
     delayMicroseconds(speedDelay);
   }
 
-  Serial.println(msg);
+  delay(500);
+  pos++;
+  if (pos > 0 && axis == 'x'){
+    Serial.print(String(pos));
+    while(!_next){
+      if(Serial.available()){
+          String status = Serial.readStringUntil('#');
+          _next = status == "next";          
+      }
+    }
+  }
+  
+  return pos;
 }
 
 void setMicrostepping(int divider) {
@@ -160,40 +165,36 @@ void setMicrostepping(int divider) {
       digitalWrite(MS2, HIGH);
       digitalWrite(MS3, HIGH);
       break;
-  }  
-  String msg = "Divider = " + String(divider);
-  Serial.println(msg);
+  }
 }
 
-void demo(){
-  rotate_steps('z' + String(-30));
-  delay(500);
+void run(){
+  digitalWrite(LED_BUILTIN, HIGH);
+  
+  int pos = 0;
+  rotate_steps(pos, 'z' + String(-30));
   
   for (int x = 0; x <= 20; x += 10) {
-    rotate_steps('x' + String(x));
-    delay(500);
+    pos = rotate_steps(pos, 'x' + String(x));
   }
 
-  rotate_steps('y' + String(30));
+  rotate_steps(pos, 'y' + String(30));
+  
   for (int x = 20; x >= 0; x -= 10) {
-    rotate_steps('x' + String(x));
-    delay(500);
+    pos = rotate_steps(pos, 'x' + String(x));
   }
   
-  rotate_steps('y' + String(60));
+  rotate_steps(pos, 'y' + String(60));
+  
   for (int x = 0; x <= 20; x += 10) {
-    rotate_steps('x' + String(x));
-    delay(500);
+    pos = rotate_steps(pos, 'x' + String(x));
   }
-
-  delay(500);
-  rotate_steps('x' + String(0));
-  delay(500);
-  rotate_steps('y' + String(0));
-  delay(500);
-  rotate_steps('z' + String(0));
-  delay(500);
   
-  digitalWrite(LED_BUILTIN, LOW);  
+  Serial.print("Done");
+  rotate_steps(-1, 'x' + String(0));
+  rotate_steps(-1, 'y' + String(0));
+  rotate_steps(-1, 'z' + String(0));
+  
+  digitalWrite(LED_BUILTIN, LOW);    
 }
 
