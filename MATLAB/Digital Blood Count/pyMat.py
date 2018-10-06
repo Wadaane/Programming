@@ -1,5 +1,6 @@
 import cv2
 import serial
+import numpy as np
 
 
 class SerialComm:
@@ -38,9 +39,22 @@ class SerialComm:
 
 
 def take_picture(_i):
-    name = 'Images/Samples/{:02}.jpg'.format(_i)
     ret, frame = video_capture.read()
+    ent = calc_entropy(frame)
+    name = 'Images/Samples/{:02}_{}.jpg'.format(_i, ent)
     cv2.imwrite(name, frame)
+
+    return frame, ent
+
+
+def calc_entropy(src):
+    img = cv2.cvtColor(src, cv2.COLOR_BGR2GRAY)
+    hist = cv2.calcHist([img], [0], None, [256], [0, 256])
+    hist = hist.ravel() / hist.sum()
+    logs = np.log2(hist + 0.00001)
+
+    _entropy = -1 * (hist * logs).sum()
+    return _entropy
 
 
 width = 2592
@@ -60,19 +74,27 @@ pos = 1
 
 while _run:
     _next = False
+    entropy_prev = 0
+    choice = True
+    adjustment = 'inc', 'dec'
+
     while not _next:
         msg_arduino = mSerial.read_serial()
         if msg_arduino == str(pos):
-            take_picture(pos)
-            mSerial.send_serial('next')
-            _next = True
-            pos += 1
+            image, entropy = take_picture(pos)
+            if entropy >= 6.2:
+                mSerial.send_serial('next')
+                _next = True
+                pos += 1
+            else:
+                choice ^= entropy_prev >= entropy
+
+                mSerial.send_serial(adjustment[choice])
+                entropy_prev = entropy
+
         elif msg_arduino == 'Done':
             _run = False
             break
 
 mSerial.close()
 video_capture.release()
-
-# while True:
-#     print('Hello Matlab:')
