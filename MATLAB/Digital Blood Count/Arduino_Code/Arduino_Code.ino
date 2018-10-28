@@ -11,7 +11,8 @@
 
 
 int stepPin = 0, dirPin = 0, jumps = 500, speedDelay = 500, microstepDivider = 4,
-position_currentX = 0, position_currentY = 0, position_currentZ = 0;
+position_currentX = 0, position_currentY = 0, position_currentZ = 0,
+z_max = 30, z_min = -10;
 boolean start = false;
 
 void rotate_steps(String cmd) {
@@ -52,6 +53,7 @@ void rotate_steps(String cmd) {
   	jumps = 500;
   	speedDelay = 500;
   	current = position_currentZ * jumps;
+  	steps *= -1;
   	position_currentZ = steps;
   	msg = 'z' + String(position_currentZ);
 
@@ -116,7 +118,7 @@ void setMicrostepping(int divider) {
 	}
 }
 
-int wait_check_python(int pos){
+int wait_check(int pos){
 	delay(500);
 	pos++;
 	Serial.print(String(pos));
@@ -127,9 +129,17 @@ int wait_check_python(int pos){
 			String status = Serial.readStringUntil('#');
 			_next = status == "next";
 			if(!_next){
-				String value = (status == "inc" ? "-5" : "5");
-				rotate_steps('z' + value);
-				Serial.print(String(pos));
+				int value = 0;
+				if(status == "inc")
+					value = -5;
+				else if(status == "dec")
+				 	value = 5;
+				
+				value += position_currentZ;
+				if(value < z_max) value = z_max;
+				if(value > z_min) value = z_min;
+
+				rotate_steps('z' + String(value));
 			}
 		}
 	}
@@ -141,29 +151,28 @@ void run(){
 	digitalWrite(LED_BUILTIN, HIGH);
 
 	int pos = 0;
-	rotate_steps('z' + String(-30));
-	pos = wait_check_python(pos);
+	rotate_steps('z' + String(25));
 	
 	for (int x = 0; x <= 20; x += 10) {
 		rotate_steps('x' + String(x));
-		pos = wait_check_python(pos);
+		pos = wait_check(pos);
 	}
 
 	rotate_steps('y' + String(30));
 	
 	for (int x = 20; x >= 0; x -= 10) {
 		rotate_steps('x' + String(x));
-		pos = wait_check_python(pos);
+		pos = wait_check(pos);
 	}
 	
 	rotate_steps('y' + String(60));
 	
 	for (int x = 0; x <= 20; x += 10) {
 		rotate_steps('x' + String(x));
-		pos = wait_check_python(pos);
+		pos = wait_check(pos);
 	}
 	
-	Serial.print("Done");
+	Serial.print("-1");
 	rotate_steps('x' + String(0));
 	rotate_steps('y' + String(0));
 	rotate_steps('z' + String(0));
